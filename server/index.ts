@@ -18,17 +18,28 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+
 // Initialize database and auto-seed if empty
 initializeDatabase();
 (async () => {
     try {
+        // Run migrations to ensure tables exist
+        const migrationsPath = process.env.NODE_ENV === "production" 
+            ? path.join(__dirname, "./migrations") 
+            : path.join(__dirname, "../migrations");
+            
+        console.log(`🛠️ Verifying database schema at: ${migrationsPath}`);
+        await migrate(db, { migrationsFolder: migrationsPath });
+        
+        // Check if seeding is needed
         const statsCount = await db.select({ value: count() }).from(statistics);
         if (statsCount[0].value === 0) {
-            console.log("Empty database detected. Starting auto-seed...");
+            console.log("🌱 Empty database detected. Starting auto-seed...");
             await seed();
         }
     } catch (error) {
-        console.error("Auto-seed check failed:", error);
+        console.error("❌ Startup process failed:", error);
     }
 })();
 
