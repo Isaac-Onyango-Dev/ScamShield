@@ -38,9 +38,16 @@ export function SearchBar({ onSearch, isLoading }: SearchBarProps) {
     return (
         <div className="w-full bg-gradient-to-r from-slate-900 to-slate-800 py-12 px-4 sm:px-6 lg:px-8">
             <div className="max-w-2xl mx-auto">
-                <h1 className="text-4xl font-bold text-white text-center mb-2">
-                    ScamShield
-                </h1>
+                <div className="flex flex-col items-center mb-6">
+                    <img
+                        src="/logo.png"
+                        alt="ScamShield Logo"
+                        className="w-24 h-24 mb-4 rounded-xl shadow-lg border-2 border-blue-500/20"
+                    />
+                    <h1 className="text-4xl font-bold text-white text-center">
+                        ScamShield
+                    </h1>
+                </div>
                 <p className="text-gray-300 text-center mb-8">
                     Check if a phone, email, or domain is a scam
                 </p>
