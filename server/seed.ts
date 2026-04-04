@@ -7,7 +7,7 @@
 import { db } from "./lib/db";
 import { commonScams, scamReports, statistics } from "../shared/schema";
 
-async function seed() {
+export async function seed() {
     console.log("🌱 Seeding demo data...");
 
     // Common known scam numbers/emails
@@ -82,7 +82,10 @@ async function seed() {
     console.log("✅ Seeding complete!");
 }
 
-seed().catch((error) => {
-    console.error("❌ Seeding failed:", error);
-    process.exit(1);
-});
+// Root execution check
+if (import.meta.url.endsWith(process.argv[1])) {
+    seed().catch((error) => {
+        console.error("❌ Seeding failed:", error);
+        process.exit(1);
+    });
+}

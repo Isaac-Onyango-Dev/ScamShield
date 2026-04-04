@@ -1,9 +1,12 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { initializeDatabase } from "./lib/db";
+import { initializeDatabase, db } from "./lib/db";
+import { statistics } from "../shared/schema";
+import { seed } from "./seed";
 import searchRoutes from "./routes/search";
 import statsRoutes from "./routes/stats";
+import { count } from "drizzle-orm";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,8 +18,19 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ limit: "10mb", extended: true }));
 
-// Initialize database
+// Initialize database and auto-seed if empty
 initializeDatabase();
+(async () => {
+    try {
+        const statsCount = await db.select({ value: count() }).from(statistics);
+        if (statsCount[0].value === 0) {
+            console.log("Empty database detected. Starting auto-seed...");
+            await seed();
+        }
+    } catch (error) {
+        console.error("Auto-seed check failed:", error);
+    }
+})();
 
 // API Routes
 app.use("/api/search", searchRoutes);
