@@ -38,25 +38,23 @@ jobs:
           name: dist
           path: dist/
 
-  # Optional: Deploy to Vercel
+  # Deploy a redirect from GitHub Pages to Render
   deploy:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist
-          path: dist/
+      - name: Create Redirect HTML
+        run: |
+          mkdir -p redirect_public
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=https://scamshield-dkmg.onrender.com/" /><title>Redirecting to ScamShield...</title><style>body{font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background-color:#f9fafb;}</style></head><body><div style="text-align:center;"><h2>Redirecting to ScamShield...</h2><p>If you are not redirected automatically, <a href="https://scamshield-dkmg.onrender.com/" style="color:#2563eb;text-decoration:none;">click here</a>.</p></div></body></html>' > redirect_public/index.html
 
-      # Add your deployment step here (Vercel, GitHub Pages, etc.)
-      # Example for Vercel:
-      # - name: Deploy to Vercel
-      #   uses: amondnet/vercel-action@v20
-      #   with:
-      #     vercel-token: ${{ secrets.VERCEL_TOKEN }}
-      #     github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./redirect_public
