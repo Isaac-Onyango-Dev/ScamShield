@@ -1,188 +1,92 @@
-# ScamShield - AI-Powered Scam Detection
+# ScamShield
 
-A lightweight, open-source web application that uses AI and community data to detect and report scams, fraud, and phishing attempts.
+**Open-source OSINT & scam-intelligence engine.** Paste an email address, link, domain, IP, phone number or a whole suspicious message. ScamShield queries 20+ live intelligence sources in parallel, streams each result as it arrives, and gives you an **explainable** 0–100 risk score with plain-language advice.
 
-## Features
+It works like hosted tools such as EmailOSINT (breach history, infostealer logs, public profiles) but also covers links, domains, IPs, phone numbers and message text. It's self-hostable, MIT-licensed, and every score can be traced back to the evidence behind it.
 
-✅ **AI-Powered Analysis** - Uses OpenAI to analyze suspicious content for scam indicators
-✅ **Community Reports** - Build a growing database of reported scams and fraud
-✅ **Lookups.io-Style UI** - Clean, intuitive search interface for quick lookups
-✅ **SQLite Database** - No external database setup required, works offline
-✅ **Easy Deployment** - Deploy from GitHub with zero configuration
-✅ **Type-Safe** - Full TypeScript from frontend to backend
-✅ **Real-Time Analysis Cache** - Fast repeat lookups with intelligent caching
+![ScamShield home](docs/home.png)
 
-## Tech Stack
-
-- **Frontend**: React 18 + Vite + Tailwind CSS
-- **Backend**: Express.js + TypeScript
-- **Database**: SQLite + Drizzle ORM
-- **AI**: OpenAI GPT-4o (with heuristic fallback)
-- **State Management**: TanStack Query
-
-## Getting Started
-
-### Prerequisites
-
-- Node.js 18+
-- npm or yarn
-- OpenAI API key (optional - heuristic analysis works without it)
-
-### Local Development
-
-1. **Clone and install**
-   ```bash
-   git clone https://github.com/yourusername/ScamShield.git
-   cd ScamShield
-   npm install
-   ```
-
-2. **Setup environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env and add your OpenAI API key (optional)
-   ```
-
-3. **Run development server**
-   ```bash
-   npm run dev
-   ```
-   Opens at `http://localhost:5000`
-
-4. **Type checking**
-   ```bash
-   npm run check
-   ```
-
-### Production Build
-
-```bash
-npm run build
-npm run start
-```
-
-## Deployment
-
-### GitHub Pages + Vercel
-
-1. Build: `npm run build`
-2. Deploy the `/dist` folder to Vercel
-3. Set environment variable `OPENAI_API_KEY` in Vercel dashboard
-
-### Self-Hosted
-
-```bash
-npm run build
-npm run start
-PORT=3000 node dist/index.js
-```
-
-### Docker
-
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY . .
-RUN npm install
-RUN npm run build
-EXPOSE 5000
-CMD ["npm", "run", "start"]
-```
-
-## Environment Variables
-
-```env
-# Add to .env
-OPENAI_API_KEY=sk-... # Optional - app works without it
-DATABASE_URL=sqlite.db # Path to SQLite database
-PORT=5000 # Server port
-NODE_ENV=production # or development
-```
-
-## API Endpoints
-
-### Search/Analyze
-- `POST /api/search/search` - Analyze content for scam indicators
-- `GET /api/search/:content?type=phone` - Legacy quick lookup
-
-### Community Reports
-- `POST /api/search/reports` - Submit a scam report
-- `GET /api/search/top-reports?limit=20` - Get top reported scams
-
-### Stats
-- `GET /api/stats/stats` - Dashboard statistics
-
-## How It Works
-
-1. **Input**: User enters phone, email, domain, IP, or text
-2. **Auto-Detection**: System detects content type automatically
-3. **Analysis**: AI checks for fraud patterns + community data
-4. **Results**: Risk score (0-100) + recommendations + community insights
-5. **Caching**: Results cached for 30 days to speed up repeat lookups
-
-## Community Database
-
-The SQLite database stores:
-- **Scam Reports**: User-submitted reports with risk scores
-- **Analysis Cache**: AI analysis results for faster lookups
-- **Statistics**: Aggregate data for dashboard
-- **Known Scams**: Pre-populated database of famous scam numbers/emails
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Add AI analysis rules to `server/services/openai.ts`
-4. Commit changes (`git commit -m 'Add amazing feature'`)
-5. Push to branch (`git push origin feature/amazing-feature`)
-6. Open a Pull Request
-
-## Roadmap (v1.0 → Enterprise)
-
-**MVP (Current)**
-- ✅ AI analysis + community DB
-- ✅ SQLite database
-- ✅ Search UI
-
-**v1.1 (Next)**
-- [ ] User accounts & authentication
-- [ ] Advanced reporting system
-- [ ] Image scam detection
-- [ ] Batch API for businesses
-
-**Enterprise Version**
-- [ ] PostgreSQL/MongoDB for scale
-- [ ] Real-time data feeds from carriers
-- [ ] Reverse lookup API integration
-- [ ] Mobile app SDK
-- [ ] Multi-language support
-
-## Limitations
-
-- **Data**: Community-based; limited to reported scams until scale grows
-- **Accuracy**: AI analysis is heuristic-based without real-time carrier data
-- **Rate Limits**: No built-in rate limiting in light version
-- **Scale**: SQLite works for 100K+ records; use PostgreSQL for millions
-
-## License
-
-MIT - See LICENSE file
-
-## Disclaimer
-
-ScamShield is a community tool for educational purposes. While we strive for accuracy, we cannot guarantee all results. Always verify suspicious contact before taking action. For fraud, contact local authorities.
-
-## Support
-
-- 📧 Email: support@scamshield.app
-- 🐛 Issues: GitHub Issues
-- 💬 Discussions: GitHub Discussions
-- 📖 Docs: See wiki
-
-## Acknowledgments
-
-Inspired by Lookups.io, Truecaller, and the FTC's fraud prevention efforts.
+> Public sources only: ScamShield never emails, calls, or logs into anything, and never contacts the target.
 
 ---
 
-**Built with ❤️ for a safer internet**
+## What it checks
+
+| Target | Intelligence sources |
+|---|---|
+| **Email** | Breaches (**XposedOrNot**, **Have I Been Pwned**¹), **infostealer malware logs** (Hudson Rock Cavalier), **Gravatar** profile & verified accounts, **GitHub** commit authorship, **PGP** keys, disposable-provider list (~9k domains), free-mailbox brand impersonation (`paypal.support@gmail.com`), role accounts, MX / SPF / DMARC, domain age & blocklists for custom domains |
+| **URL** | `@`-userinfo tricks, raw-IP hosts, shorteners, non-standard ports, executable downloads, phishing-kit personalization (`?email=victim@…`), open redirects, free-hosting abuse, **Google Safe Browsing**¹, **URLhaus**¹, plus all domain checks |
+| **Domain** | **RDAP** registration age / registrar / hold status, typosquatting (Levenshtein), **homograph/IDN** attacks (mixed-script punycode, confusable skeletons), brand-in-subdomain, abused TLDs, **Spamhaus DBL / SURBL / URIBL**, TLS certificate (SSRF-guarded), DNS & mail auth |
+| **IP** | RDAP network owner, country & abuse contact, reverse DNS, hosting detection, **Spamhaus ZEN / SpamCop / DroneBL**, **AbuseIPDB**¹ |
+| **Phone** | libphonenumber validity, country, **line type** (mobile / VoIP / premium-rate / toll-free…), Wangiri international ranges, community reports |
+| **Message** | 17 social-engineering tactics (credential/OTP requests, advance fee, gift-card & crypto payment, legal threats, fake delivery, remote-access tools…), **tactic combinations**, and automatic extraction of links, emails and numbers with one-click pivots |
+| **All** | Community reports (per-reporter de-duplicated), curated known-scam list, and deep links to VirusTotal, urlscan, Shodan, crt.sh, Epieos, Truecaller and others |
+
+¹ Optional. The source switches on when its API key is set; see [`.env.example`](.env.example). Everything else works without keys.
+
+<details><summary>Example: a phishing SMS analysed</summary>
+
+![Message lookup](docs/lookup-message.png)
+
+</details>
+
+## Quick start
+
+```bash
+git clone https://github.com/isaac-onyango-dev/scamshield.git
+cd scamshield
+npm install
+cp .env.example .env        # optional: add API keys
+npm run dev                 # http://localhost:5000 (API + Vite HMR on one port)
+```
+
+Production:
+
+```bash
+npm run build && npm start
+# or
+docker build -t scamshield . && docker run -p 5000:5000 -v scamshield-data:/data scamshield
+```
+
+Migrations and seeding run automatically on boot. Deployment options (Render blueprint, Docker, VPS) are in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## API
+
+```bash
+# Full JSON report (type auto-detected; add &type=email etc. to force; &fresh=1 bypasses cache)
+curl -G localhost:5000/api/lookup --data-urlencode "q=paypal-secure-login.xyz"
+
+# Live stream: start → check (per source) → done
+curl -N -G localhost:5000/api/lookup/stream --data-urlencode "q=someone@example.com"
+
+# Community report
+curl -X POST localhost:5000/api/reports -H 'content-type: application/json' \
+  -d '{"query":"amaz0n-verify.top","category":"phishing","description":"SMS lure"}'
+```
+
+Also `GET /api/sources`, `GET /api/stats` and `GET /api/health`. All response types live in [`shared/types.ts`](shared/types.ts).
+
+## How scoring works
+
+Each source emits **signals**: `risk` or `trust`, with severity `low | medium | high | critical`. Signals are treated as independent evidence and combined as `1 − Π(1 − wᵢ)`. Trust signals (for example a domain that's 10 years old, enforced DMARC, or a long public footprint) dampen the result, but **a critical finding such as a blocklist hit or a known scam can never be pushed below 80**. Two independent high-severity findings floor the score at 60. The UI lists every signal behind the number, and *confidence* shows how many sources actually answered.
+
+AI (optional, via `OPENAI_API_KEY`) only writes the plain-language summary. It never changes the score.
+
+## Development
+
+```bash
+npm run check    # TypeScript (server, client, tests)
+npm test         # 100 unit + integration tests (vitest + supertest)
+npm run db:generate      # new migration after editing shared/schema.ts
+npm run data:disposable  # refresh the disposable-email domain list
+```
+
+Adding a source is a single file: implement `CheckDefinition` (`server/engine/types.ts`) and register it in `server/checks/index.ts`. The runner handles concurrency, timeouts, abort, error isolation, streaming and the Sources page. See [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Responsible use
+
+ScamShield is built to help people **decide whether to trust something that contacted them**, and to help defenders triage indicators. It shows only data that is already public, never displays leaked passwords, and doesn't log looked-up values in request logs. Don't use it to stalk or harass individuals. Results are indicators, not proof.
+
+## License
+
+MIT

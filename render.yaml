@@ -1,0 +1,34 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: scamshield
+    runtime: node
+    plan: starter # a persistent disk requires a paid instance; on free, data resets on each deploy
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATABASE_URL
+        value: /var/data/scamshield.db
+      - key: TRUST_PROXY
+        value: "1"
+      - key: REPORTER_SALT
+        generateValue: true
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: HIBP_API_KEY
+        sync: false
+      - key: GOOGLE_SAFE_BROWSING_KEY
+        sync: false
+      - key: URLHAUS_AUTH_KEY
+        sync: false
+      - key: ABUSEIPDB_API_KEY
+        sync: false
+      - key: GITHUB_TOKEN
+        sync: false
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1

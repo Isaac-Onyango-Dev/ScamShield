@@ -1,80 +1,79 @@
+import path from "node:path";
+import fs from "node:fs";
+import { fileURLToPath } from "node:url";
 import express from "express";
-import path from "path";
-import { fileURLToPath } from "url";
-import { initializeDatabase, db } from "./lib/db";
-import { statistics } from "../shared/schema";
+import { config } from "./config";
+import { logger, errorMessage } from "./logger";
+import { openDatabase, runMigrations } from "./lib/db";
+import { createDnsClient } from "./lib/dns";
+import { createCommunityStore } from "./lib/community";
+import { createReportCache } from "./lib/reportCache";
+import { createLookupService } from "./engine/lookup";
+import { createSummarizer } from "./engine/summary";
+import { ALL_CHECKS } from "./checks";
+import { createApp } from "./app";
 import { seed } from "./seed";
-import searchRoutes from "./routes/search";
-import statsRoutes from "./routes/stats";
-import { count } from "drizzle-orm";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const here = path.dirname(fileURLToPath(import.meta.url));
+const isProd = config.NODE_ENV === "production";
+// Bundled server lives in dist/ next to dist/migrations and dist/public.
+const migrationsFolder = fs.existsSync(path.join(here, "migrations")) ? path.join(here, "migrations") : path.join(here, "../migrations");
 
-const app = express();
-const PORT = process.env.PORT || 5000;
+const { db, sqlite } = openDatabase(config.DATABASE_URL);
+runMigrations(db, migrationsFolder);
+seed(db);
 
-// Middleware
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ limit: "10mb", extended: true }));
+const community = createCommunityStore(db);
+const cache = createReportCache(db);
+const lookup = createLookupService({
+    config,
+    checks: ALL_CHECKS,
+    fetch: globalThis.fetch,
+    dns: createDnsClient(config.DNS_SERVERS),
+    community,
+    cache,
+    summarize: createSummarizer(config),
+    onLookup: () => community.bumpStat("total_lookups"),
+});
 
-import { migrate } from "drizzle-orm/better-sqlite3/migrator";
+const app = createApp({ config, lookup, community, cache, checks: ALL_CHECKS });
 
-// Initialize database and auto-seed if empty
-initializeDatabase();
-(async () => {
+if (isProd) {
+    const clientDir = path.join(here, "public");
+    app.use(express.static(clientDir, { index: false, maxAge: "1h", setHeaders: (res, file) => {
+        if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader("cache-control", "public, max-age=31536000, immutable");
+    } }));
+    app.get("*", (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
+} else {
+    // Dev: Vite middleware gives HMR on the same port as the API.
+    const { createServer } = await import("vite");
+    const vite = await createServer({ server: { middlewareMode: true }, appType: "spa" });
+    app.use(vite.middlewares);
+}
+
+const server = app.listen(config.PORT, () => {
+    logger.info(`ScamShield listening on http://localhost:${config.PORT}`, { env: config.NODE_ENV });
+    const off = ALL_CHECKS.filter((c) => c.disabledReason?.(config)).map((c) => c.id);
+    if (off.length) logger.info("optional sources disabled (no API key)", { sources: off });
+});
+
+const purge = setInterval(() => {
     try {
-        // Run migrations to ensure tables exist
-        const migrationsPath = process.env.NODE_ENV === "production" 
-            ? path.join(__dirname, "./migrations") 
-            : path.join(__dirname, "../migrations");
-            
-        console.log(`🛠️ Verifying database schema at: ${migrationsPath}`);
-        await migrate(db, { migrationsFolder: migrationsPath });
-        
-        // Check if seeding is needed
-        const statsCount = await db.select({ value: count() }).from(statistics);
-        if (statsCount[0].value === 0) {
-            console.log("🌱 Empty database detected. Starting auto-seed...");
-            await seed();
-        }
-    } catch (error) {
-        console.error("❌ Startup process failed:", error);
+        const n = cache.purgeExpired();
+        if (n) logger.debug("purged expired lookups", { count: n });
+    } catch (err) {
+        logger.warn("cache purge failed", { error: errorMessage(err) });
     }
-})();
+}, 15 * 60_000);
+purge.unref();
 
-// API Routes
-app.use("/api/search", searchRoutes);
-app.use("/api/stats", statsRoutes);
-
-// Health check
-app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-});
-
-// Serve React app
-const clientPath = path.join(__dirname, "../dist/public");
-app.use(express.static(clientPath));
-
-// Fallback to index.html for React routing
-app.get("*", (req, res) => {
-    res.sendFile(path.join(clientPath, "index.html"));
-});
-
-// Error handling
-app.use(
-    (
-        err: any,
-        req: express.Request,
-        res: express.Response,
-        next: express.NextFunction
-    ) => {
-        console.error(err);
-        res.status(500).json({ error: "Internal server error" });
-    }
-);
-
-app.listen(PORT, () => {
-    console.log(`🚀 ScamShield API running on http://localhost:${PORT}`);
-    console.log(`📍 Environment: ${process.env.NODE_ENV || "development"}`);
-});
+function shutdown(signal: string) {
+    logger.info(`${signal} received, shutting down`);
+    server.close(() => {
+        sqlite.close();
+        process.exit(0);
+    });
+    setTimeout(() => process.exit(1), 10_000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

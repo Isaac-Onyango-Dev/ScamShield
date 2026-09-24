@@ -8,6 +8,20 @@
       "when": 1775340870961,
       "tag": "0000_massive_ultragirl",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790228723591,
+      "tag": "0001_v2_intel_engine",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790228724553,
+      "tag": "0002_drop_legacy_tables",
+      "breakpoints": true
     }
   ]
 }

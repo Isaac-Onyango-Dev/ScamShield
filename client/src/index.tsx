@@ -5,12 +5,7 @@ import App from "./App";
 import "./index.css";
 
 const queryClient = new QueryClient({
-    defaultOptions: {
-        queries: {
-            staleTime: 1000 * 60 * 5, // 5 minutes
-            gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
-        },
-    },
+    defaultOptions: { queries: { staleTime: 60_000, retry: 1, refetchOnWindowFocus: false } },
 });
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -18,5 +13,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <QueryClientProvider client={queryClient}>
             <App />
         </QueryClientProvider>
-    </React.StrictMode>
+    </React.StrictMode>,
 );

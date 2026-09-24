@@ -1,22 +1,18 @@
 import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import * as schema from "../../shared/schema";
-import path from "path";
 
-const dbPath = process.env.DATABASE_URL || "sqlite.db";
+export type DB = BetterSQLite3Database<typeof schema>;
 
-// Create or connect to database
-const sqlite = new Database(dbPath);
-
-// Enable foreign keys
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
-
-export const db = drizzle(sqlite, { schema });
-
-// Initialize database tables
-export function initializeDatabase() {
-    console.log(`📊 Database initialized at: ${path.resolve(dbPath)}`);
+export function openDatabase(file: string): { db: DB; sqlite: Database.Database } {
+    const sqlite = new Database(file);
+    sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("busy_timeout = 5000");
+    sqlite.pragma("foreign_keys = ON");
+    return { db: drizzle(sqlite, { schema }), sqlite };
 }
 
-export { sqlite };
+export function runMigrations(db: DB, migrationsFolder: string) {
+    migrate(db, { migrationsFolder });
+}

@@ -1,151 +1,44 @@
-# Deployment Guide
+# Deployment
 
-Quick guide to deploy ScamShield from GitHub.
+ScamShield is a long-running Node 22 server with a SQLite file. Deploy it anywhere that runs a persistent process. Serverless platforms (Vercel functions, Netlify, Lambda) are **not** a fit: SSE streams, in-process rate limits and SQLite all need a persistent process and disk.
 
-## Option 1: Vercel (Recommended - Free Tier Available)
+## Render (blueprint included)
 
-### Setup
+1. Render dashboard → **New → Blueprint** → select this repo. `render.yaml` configures build, start, health check, a 1 GB persistent disk at `/var/data`, and a generated `REPORTER_SALT`.
+2. Fill in whichever optional API keys you have.
+3. Deploy. Migrations and seeding run on boot.
 
-1. **Connect GitHub**
-   - Go to [vercel.com](https://vercel.com)
-   - Sign in with GitHub
-   - Click "Add New..." → "Project"
-   - Select your ScamShield repository
+> On Render's **free** instance there is no persistent disk, so community reports reset on every deploy. Use `starter` or higher to keep data.
 
-2. **Configure Build**
-   - Build Command: `npm run build`
-   - Output Directory: `dist/public`
-   - Node.js Version: 18.x
-
-3. **Environment Variables**
-   - Add `OPENAI_API_KEY` from your OpenAI dashboard
-   - Add `DATABASE_URL` (auto-generated or point to cloud SQLite)
-
-4. **Deploy**
-   - Click "Deploy"
-   - Vercel automatically redeploys on `git push`
-
-**URL**: `https://your-project.vercel.app`
-
----
-
-## Option 2: GitHub Pages + API Server
-
-For static deployment with external API backend:
-
-1. Build: `npm run build`
-2. Deploy `/dist/public` to GitHub Pages
-3. Deploy `/server` to a Node.js host (Railway, Heroku, etc.)
-4. Update API endpoint in frontend
-
----
-
-## Option 3: Self-Hosted Server
-
-### Docker
+## Docker
 
 ```bash
-# Build image
 docker build -t scamshield .
-
-# Run container
-docker run -p 5000:5000 \
-  -e OPENAI_API_KEY=sk-... \
-  -e DATABASE_URL=/data/sqlite.db \
-  -v ./data:/data \
-  scamshield
+docker run -d --name scamshield -p 5000:5000 -v scamshield-data:/data \
+  -e REPORTER_SALT="$(openssl rand -hex 32)" -e TRUST_PROXY=1 scamshield
 ```
 
-### Traditional Server (Ubuntu/Debian)
+The image runs as a non-root user, stores the DB in the `/data` volume, and has a health check.
+
+## VPS / bare metal
 
 ```bash
-# Install Node.js
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Clone and setup
-git clone https://github.com/yourusername/ScamShield.git
-cd ScamShield
-npm install
-npm run build
-
-# Run with PM2 (process manager)
-npm install -g pm2
-pm2 start "npm run start" --name scamshield
-pm2 save
+npm ci && npm run build
+NODE_ENV=production DATABASE_URL=/var/lib/scamshield/db.sqlite PORT=5000 node dist/index.js
 ```
 
----
+Run it under systemd or pm2 behind nginx or Caddy. For SSE, disable proxy buffering on `/api/lookup/stream` (`proxy_buffering off;`). The app already sends `X-Accel-Buffering: no`.
 
-## Option 4: Railway
+## Production checklist
 
-1. Connect GitHub repo
-2. Set environment variables
-3. Railway auto-detects Node.js app and deploys
-4. Custom domain optional
+- [ ] `REPORTER_SALT` set to a long random value
+- [ ] `TRUST_PROXY` equals the number of proxies in front of the app, or rate limits key on the proxy's IP
+- [ ] `DATABASE_URL` on persistent storage, backed up (for example `sqlite3 db ".backup snapshot.db"`)
+- [ ] DNS resolver allowed by Spamhaus/URIBL. They refuse big public resolvers; the Sources card shows "unavailable from this resolver" when that happens. Run a local `unbound` or use your host's resolver via `DNS_SERVERS`
+- [ ] Optional keys: `URLHAUS_AUTH_KEY` (free), `GOOGLE_SAFE_BROWSING_KEY` (free), `ABUSEIPDB_API_KEY` (free tier), `GITHUB_TOKEN`, `HIBP_API_KEY` (paid), `OPENAI_API_KEY`
+- [ ] Health check at `GET /api/health`
+- [ ] Logs are JSON lines on stdout/stderr in production; ship them to your log stack
 
----
+## Environment variables
 
-## Environment Setup Checklist
-
-- [ ] `OPENAI_API_KEY` set (optional, heuristic analysis works without it)
-- [ ] `DATABASE_URL` set or using default `sqlite.db`
-- [ ] `NODE_ENV=production`
-- [ ] Build completed: `npm run build`
-- [ ] Seed demo data: `npx tsx server/seed.ts` (optional)
-
-## Database Migrations (if needed)
-
-```bash
-# Push schema to database
-npm run db:push
-
-# Generate migrations
-npx drizzle-kit generate:sqlite
-```
-
-## Troubleshooting
-
-**Port already in use**
-```bash
-PORT=3000 npm run start
-```
-
-**Database locked error**
-- Ensure only one instance of the server running
-- Check for lingering node processes: `ps aux | grep node`
-
-**OpenAI API errors**
-- Verify API key is valid
-- Check rate limits on OpenAI dashboard
-- App falls back to heuristic analysis on failure
-
-**Build fails**
-```bash
-rm -rf node_modules dist
-npm install
-npm run build
-```
-
----
-
-## Performance Tips
-
-1. **Enable caching**: Results cached for 30 days
-2. **Monitor database**: Check `sqlite.db` size periodically
-3. **Use CDN**: Serve static assets (`dist/public`) via CDN
-4. **Scale DB**: Move to PostgreSQL after 100K+ reports
-
-## Monitoring
-
-Add health check URL: `GET /api/health`
-
-Example uptime monitoring:
-```bash
-# Check every 5 minutes
-*/5 * * * * curl -f http://localhost:5000/api/health || alert
-```
-
----
-
-**Need help?** See README.md or open an issue on GitHub.
+See [`.env.example`](.env.example). Every variable is validated at startup (`server/config.ts`), so a bad value fails fast with a clear message.

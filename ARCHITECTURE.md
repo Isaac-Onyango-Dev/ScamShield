@@ -1,217 +1,63 @@
-# ScamShield Light - Architecture Overview
-
-## System Architecture
+# Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    USER BROWSER                              │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │  React 18 + Vite                                      │   │
-│  │  ┌─────────────┐  ┌──────────────┐  ┌───────────────┐│   │
-│  │  │ SearchBar   │  │ SearchResults│  │ StatsDisplay  ││   │
-│  │  │ (Hero UI)   │  │ (Risk Score) │  │ (Dashboard)   ││   │
-│  │  └─────────────┘  └──────────────┘  └───────────────┘│   │
-│  │         ↓              ↓                    ↓           │   │
-│  │  ┌────────────────────────────────────────────────┐   │   │
-│  │  │ useSearch() & useReportScam() React Hooks      │   │   │
-│  │  │ (TanStack Query for state management)          │   │   │
-│  │  └────────────────────────────────────────────────┘   │   │
-│  └───────────────────────────────────────────────────────┘   │
-│                        ↓ HTTP ↓                               │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                    EXPRESS SERVER (Node.js)                   │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │ API Routes                                            │   │
-│  │ POST /api/search/search          (analyze content)   │   │
-│  │ POST /api/search/reports         (submit report)    │   │
-│  │ GET  /api/search/top-reports     (top scams)        │   │
-│  │ GET  /api/stats/stats            (dashboard data)   │   │
-│  │ GET  /api/health                 (health check)     │   │
-│  └───────────────────────────────────────────────────────┘   │
-│                        ↓                                      │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │ Business Logic Services                               │   │
-│  │ ┌──────────────────┐  ┌──────────────┐              │   │
-│  │ │ OpenAI Service   │  │ Cache Service│              │   │
-│  │ │ (AI Analysis)    │  │ (30-day TTL) │              │   │
-│  │ └──────────────────┘  └──────────────┘              │   │
-│  └───────────────────────────────────────────────────────┘   │
-│                        ↓                                      │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│                    SQLITE DATABASE                            │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │ Tables (Drizzle ORM)                                │    │
-│  │                                                      │    │
-│  │ scam_reports                                        │    │
-│  │   id, content, contentType, reportType, riskScore   │    │
-│  │   reportCount, verified, createdAt, ...             │    │
-│  │                                                      │    │
-│  │ analysis_cache                                      │    │
-│  │   contentHash, content, riskScore, analysis, ...    │    │
-│  │   expiresAt (30 days)                              │    │
-│  │                                                      │    │
-│  │ common_scams                                        │    │
-│  │   content, contentType, category, isKnownScam, ...  │    │
-│  │   (pre-populated with known scams)                  │    │
-│  │                                                      │    │
-│  │ statistics                                          │    │
-│  │   metric (total_reports, etc), value, ...           │    │
-│  │                                                      │    │
-│  │ users (future)                                      │    │
-│  │   username, password, email, createdAt             │    │
-│  └──────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+            ┌──────────────────────────── client (React + Vite + Tailwind) ──────────────────────────┐
+            │  SearchBox ─detect()─▶ /search?q=…  ──EventSource──▶ /api/lookup/stream                 │
+            │  VerdictPanel (gauge, red flags, trust, advice)   CheckCard × N (fill in as they stream) │
+            └───────────────────────────────────────────────┬────────────────────────────────────────┘
+                                                            │ SSE / JSON
+┌───────────────────────────────────────── server (Express) ▼─────────────────────────────────────────┐
+│ helmet CSP · rate limits · zod validation                                     routes/api.ts           │
+│                                                                                                        │
+│ LookupService.resolveTarget(q) ── shared/detect.ts (+ libphonenumber E.164)       engine/lookup.ts    │
+│        │                                                                                               │
+│        ├─ cache hit? (lookup_cache, sha256(type:normalized), TTL) ──▶ replay events                   │
+│        ▼                                                                                               │
+│ runChecks(applicableChecks)  — Promise.all, per-check timeout + AbortSignal, errors isolated          │
+│   community · email.* · phone · text · url · lookalike · blocklists · safebrowsing · urlhaus ·         │
+│   abuseipdb · breaches · hibp · infostealer · dns · rdap · tls · ip.network · pivots                   │
+│        │  (shared per-lookup memo dedupes DNS between checks)                                          │
+│        ▼                                                                                               │
+│ computeVerdict(signals)  →  summarize() (rules, or OpenAI with rules fallback)  →  cache.set          │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                 │ better-sqlite3 (WAL)                          │ fetch / node:dns / node:tls
+          scam_reports · report_events ·                 XposedOrNot · Hudson Rock · Gravatar · GitHub ·
+          common_scams · lookup_cache · statistics       keys.openpgp.org · rdap.org · Spamhaus/SURBL/URIBL ·
+                                                         SpamCop · DroneBL · (HIBP, GSB, URLhaus, AbuseIPDB)
 ```
 
-## Data Flow: Search Request
+## Key design decisions
 
-```
-1. User enters "1-800-0000001"
-                    ↓
-2. Frontend detects type as "phone"
-                    ↓
-3. SearchBar component calls onSearch()
-                    ↓
-4. useSearch() hook makes POST to /api/search/search
-   {
-     "content": "1-800-0000001",
-     "type": "phone"
-   }
-                    ↓
-5. Express server receives request
-                    ↓
-6. Cache service checks if already analyzed
-   (if found and valid → skip to step 10)
-                    ↓
-7. OpenAI service analyzes (or uses heuristics)
-                    ↓
-8. Database queries for community reports
-                    ↓
-9. Result cached in analysis_cache table
-                    ↓
-10. Response returned to frontend:
-    {
-      "analysis": {
-        "riskScore": 75,
-        "riskLevel": "high",
-        "isScam": true,
-        "reasoning": "...",
-        "recommendations": [...],
-        "details": {...}
-      },
-      "communityReports": {
-        "count": 42,
-        "isKnownScam": true
-      },
-      "cached": false
-    }
-                    ↓
-11. SearchResults component displays to user
-```
+| Decision | Why | Trade-off |
+|---|---|---|
+| **Pluggable `CheckDefinition`s** with `appliesTo`, `supports()`, `disabledReason()` | One file per source; the Sources page, skipping and streaming come free | Checks can't depend on each other's output (they share a memo instead) |
+| **Concurrent execution, per-check timeout, AbortSignal** | Total latency is the slowest source (≈8 s max), not the sum. Aborted sockets and fetches are released | A slow source shows "Unavailable" rather than blocking |
+| **Failures never fail the lookup** | Third-party APIs rate-limit and go down. `confidence` reports coverage honestly | The score may be computed on partial evidence (shown in the UI) |
+| **Server-Sent Events** instead of WebSockets | One-way, proxy-friendly, auto-reconnect semantics, trivial on Express | No client→server messages mid-lookup (not needed) |
+| **Deterministic, explainable scoring**; AI only summarizes | Reproducible, testable, can't be prompt-injected by the message being analysed | Weights are hand-tuned (see `engine/scoring.ts`) |
+| **SQLite + WAL** | Zero-ops, fast, single-file backups | Single node. For horizontal scale, move to Postgres (drizzle makes this mechanical) and Redis for rate limits and cache |
+| **Cache keyed by `sha256(type:normalized)`**, invalidated on report | Avoids hammering free APIs; community changes show up immediately | Up to `LOOKUP_CACHE_TTL_MINUTES` of staleness for external data (users can Re-scan) |
 
-## Data Flow: Report Submission
+## Security
 
-```
-1. User fills report form
-2. Calls useReportScam() hook
-3. POST to /api/search/reports
-                    ↓
-4. Check if content already exists in scam_reports
-                    ↓
-5a. If exists: increment reportCount
-5b. If new: run AI analysis → create new report
-                    ↓
-6. Auto-analyze with OpenAI
-                    ↓
-7. Store with risk score, tags, metadata
-                    ↓
-8. Update statistics (total_reports++)
-                    ↓
-9. Return confirmation with analysis
-```
+- **SSRF:** the only check that opens a socket to a user-controlled host (TLS) resolves the host first and refuses loopback, RFC1918, link-local (cloud metadata), CGNAT, multicast and reserved ranges (`lib/netguard.ts`). URLs are **never fetched**.
+- **Input:** zod-validated, max 4000 chars, JSON body limit 32 KB.
+- **Abuse:** per-IP rate limits (`TRUST_PROXY` must match your proxy depth). Reports are de-duplicated per `sha256(salt:ip)`; raw IPs are never stored.
+- **Privacy:** request logs contain the path only, never the query string. Infostealer passwords are never shown or stored. The cache is short-lived and purged every 15 minutes.
+- **Headers:** helmet CSP (`script-src 'self'`), `no-referrer`, and no `x-powered-by`. Outbound links use `noopener noreferrer nofollow`.
 
-## File Organization
+## Data model (`shared/schema.ts`)
 
-### Frontend Components (`client/src/`)
-```
-App.tsx (main router)
-├── pages/
-│   └── Home.tsx (full-page layout)
-│       ├── SearchBar (hero search)
-│       ├── StatsDisplay (4-card grid)
-│       └── SearchResults (animated results)
-├── components/ (reusable)
-│   ├── SearchBar.tsx
-│   ├── SearchResults.tsx
-│   └── StatsDisplay.tsx
-├── lib/
-│   └── api.ts (useSearch, useReportScam hooks)
-└── index.tsx (React entry + Query Client)
-```
+- `scam_reports`: one aggregate row per `(content_type, content)`.
+- `report_events`: individual submissions with a unique `(report_id, reporter_hash)` index. Powers the 24 h stats and prevents ballot-stuffing.
+- `common_scams`: curated indicators, unique on `(content_type, content)`.
+- `lookup_cache`: full JSON reports with `expires_at`.
+- `statistics`: counters (upserted atomically).
 
-### Backend Layers (`server/`)
-```
-index.ts (Express app + middleware)
-├── routes/
-│   ├── search.ts (POST search, POST reports, GET top)
-│   └── stats.ts (GET stats)
-├── services/
-│   └── openai.ts (analyzeContent() function)
-└── lib/
-    ├── db.ts (SQLite connection + Drizzle setup)
-    └── cache.ts (getCachedAnalysis, cacheAnalysis)
-```
+Migrations live in `migrations/` and run on boot. `0001` upgrades v1 databases in place: it converts legacy text timestamps, de-duplicates rows, and adds the new tables.
 
-### Database (`shared/`)
-```
-schema.ts (Drizzle table definitions)
-└── SQLite tables:
-    ├── scamReports
-    ├── analysisCache
-    ├── commonScams
-    ├── statistics
-    └── users
-```
+## Scaling path
 
-## Technology Decisions & Why
-
-| Tech | Why |
-|------|-----|
-| **SQLite** | ✅ No server setup, file-based, perfect for light version |
-| **Drizzle ORM** | ✅ Type-safe, lightweight, auto-migrations |
-| **OpenAI** | ✅ Best AI, fallback heuristics if key missing |
-| **React Query** | ✅ Simplified async state, automatic caching |
-| **Tailwind** | ✅ Rapid styling, looks professional |
-| **Express** | ✅ Lightweight, proven, simple to scale |
-| **Vite** | ✅ Fast dev server, optimized builds |
-
-## Performance Characteristics
-
-- **Search Response**: <500ms (cached) / <2s (AI analysis)
-- **Database**: Supports 100K+ records before scaling
-- **Cache Hit Rate**: ~70% for repeated searches
-- **Concurrent Users**: ~50 (SQLite limitation)
-- **API Load**: ~10 req/sec per server (horizontal scaling: add more servers)
-
-## Scaling Path
-
-### Light Version → v1.1
-- Add user authentication
-- Per-user scan history
-- Advanced reporting
-
-### v1.1 → Enterprise
-- PostgreSQL for 1M+ records
-- Carrier APIs for real data
-- Real-time data feeds
-- Horizontal API scaling
-- Mobile app (React Native)
-- Multi-region deployment
-
----
-
-**Ready to build?** See SETUP.md for quick start instructions.
+1. **Now:** a single instance handles hundreds of lookups per minute. The bottleneck is upstream API quotas, not CPU.
+2. **Next:** put the lookup service behind a queue (BullMQ) and move the cache and rate limits to Redis so several web instances share them.
+3. **Later:** swap SQLite for Postgres, add API keys per consumer, and add a bulk endpoint that fans out through the queue.
