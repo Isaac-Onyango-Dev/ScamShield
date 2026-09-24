@@ -26,7 +26,7 @@ Conventions:
 - [ ] **FEAT-01** Search input: type badge updates live; Enter submits; Shift+Enter inserts a newline; defanged `hxxp://evil[.]com` resolves to URL; navigates to `/search?q=`. Verify: `npx playwright test --grep @F01`
 - [ ] **FEAT-02** All 6 examples open a lookup. Verify: `npx playwright test --grep @F02`
 - [ ] **FEAT-03** Home counters render values from `/api/stats`. Verify: `npx playwright test --grep @F03`
-- [ ] **FEAT-04** Capability overview lists all 6 target types and links to `/sources`. Verify: `npx playwright test --grep @F04`
+- [ ] **FEAT-04** Capability overview lists what gets checked for all 6 target types. Verify: `npx playwright test --grep @F04`
 - [ ] **FEAT-05** Streaming: planned sources show as pending, then fill in one by one; `done` renders the verdict. Verify: `npx playwright test --grep @F05`
 - [ ] **FEAT-06** `?type=` forces the type; an invalid value is ignored. Verify: `npx playwright test --grep @F06`
 - [ ] **FEAT-07** Category order is community → reputation → content → identity → exposure → infrastructure → pivots. Verify: `npx playwright test --grep @F07`
@@ -48,7 +48,7 @@ Conventions:
 - [ ] **FEAT-23** Unknown route shows "Page not found" and a link to `/`. Verify: `npx playwright test --grep @F23`
 - [ ] **FEAT-24** Nav marks "Lookup" active on `/` and `/search`; GitHub link present; footer disclaimers present. Verify: `npx playwright test --grep @F24`
 - [ ] **FEAT-25** Document metadata: title, description, OG tags, icons. Verify: `npx playwright test --grep @F25`
-- [ ] **FEAT-26** Reduced motion: under `reducedMotion: 'reduce'`, the computed `transition-duration` of a button is `0s`. Verify: `npx playwright test --grep @F26`
+- [ ] **FEAT-26** Reduced motion: under `reducedMotion: 'reduce'`, the computed `transition-duration` of a button is ≤ 0.01 ms (today's CSS computes `1e-05s`; the redesign's `0s` also passes). Verify: `npx playwright test --grep @F26`
 - [ ] **FEAT-27** Server contract: `npm test` (tests/api.test.ts) passes and GATE-08 holds. Verify: `npx vitest run tests/api.test.ts` → exit 0
 
 ## Designed states (every data-fetching view)
@@ -148,7 +148,25 @@ Conventions:
 - [ ] **CI-02** Browser directory is cached. Verify: `grep -c "actions/cache@v4" .github/workflows/build.yml` → ≥1 **and** `grep -c "ms-playwright" .github/workflows/build.yml` → ≥1
 - [ ] **CI-03** OS dependencies are still installed on a cache hit. Verify: `grep -c "npx playwright install-deps chromium" .github/workflows/build.yml` → `1`
 - [ ] **CI-04** Test config defines Chromium projects only. Verify: `grep -ciE "firefox|webkit" playwright.config.ts` → `0`
-- [ ] **CI-05** Test tooling pinned exactly. Verify: `node -p "const d=require('./package.json').devDependencies;[d['@playwright/test'],d['@axe-core/playwright']].join()"` → two exact versions (no `^` or `~`)
+- [ ] **CI-05** Test tooling pinned exactly. Verify: `node -p "const d=require('./package.json').devDependencies;[d['@playwright/test'],d['@axe-core/playwright']].join()"` → `1.56.1,4.13.0` (or newer exact versions; no `^` or `~`)
+
+## Temporary-storage notices (D9)
+
+- [ ] **STORE-01** Storage mode defaults to ephemeral. Verify: `grep -nE "STORAGE_PERSISTENT" server/config.ts` shows a boolean with default `false`, **and** `npx vitest run tests/siteUrl.test.ts` covers `storageMode` for unset / `true` / `false`
+- [ ] **STORE-02** The blueprint with a disk declares persistence. Verify: `grep -A1 "key: STORAGE_PERSISTENT" render.yaml | grep -c '"true"'` → `1`
+- [ ] **STORE-03** Mode delivered to the client without an API change. Verify: `grep -c '<meta name="scamshield-storage" content="%STORAGE_MODE%">' client/index.html` → `1` **and** (server from SITE-03 running) `curl -s http://localhost:5099/ | grep -o 'name="scamshield-storage" content="[a-z]*"'` → `ephemeral`; restarted with `STORAGE_PERSISTENT=true` → `persistent`
+- [ ] **STORE-04** Notices shown where reports are submitted or listed, and only in ephemeral mode. Verify: `npx playwright test --grep @storage-notice` (ephemeral: the report dialog shows the full sentence above Submit, the community card shows the caption, and `/api` shows the sentence on `POST /api/reports`; persistent: none of the three)
+- [ ] **STORE-05** Copy never implies permanence. Verify: `grep -rniE "permanent|forever|never lost|stored safely forever" client/src README.md` → no output
+- [ ] **STORE-06** A missing or unreplaced meta value is treated as ephemeral. Verify: `grep -c "%STORAGE_MODE%" client/src/lib/deployment.ts` → ≥1 (explicit fallback branch) **and** `npx playwright test --grep @storage-fallback`
+- [ ] **STORE-07** Operators are told how to declare persistence. Verify: `grep -c "STORAGE_PERSISTENT" DEPLOYMENT.md .env.example README.md` → each ≥1
+
+## E2E infrastructure (P0)
+
+- [ ] **E2E-01** No test can reach an unmocked API. Verify: `grep -c "unmocked" tests/e2e/support/test.ts` → ≥1 **and** `npx playwright test --grep @guard` (a self-test that calls an unmocked endpoint and expects the guard to report it)
+- [ ] **E2E-02** Every inventory row F01–F26 has a tagged test. Verify: `for i in $(seq -w 1 26); do grep -rq "@F$i\b" tests/e2e || echo "missing @F$i"; done` → no output
+- [ ] **E2E-03** An a11y baseline exists for every project × page. Verify: `for p in light dark mobile-light reduced-motion; do for g in home search sources api not-found report-dialog; do test -f tests/e2e/a11y-baseline/$p/$g.json || echo "missing $p/$g"; done; done` → no output
+- [ ] **E2E-04** Final state of A11Y-01: every baseline is empty. Verify: `node -e "const fs=require('fs'),path=require('path');const d='tests/e2e/a11y-baseline';let bad=[];for(const p of fs.readdirSync(d))for(const f of fs.readdirSync(path.join(d,p))){const j=JSON.parse(fs.readFileSync(path.join(d,p,f)));if(j.length)bad.push(p+'/'+f+': '+j.join(','))}console.log(bad.length?bad.join('\n'):'EMPTY')"` → `EMPTY` (today: the baseline mirrors audit S1)
+- [ ] **E2E-05** Specs never hard-code UI wording or selectors; those live in the page object. Verify: `grep -nE "getByRole|getByText|locator\(" tests/e2e/*.spec.ts | grep -v "app\." ` → no output
 
 ## Accessibility (WCAG 2.2 AA)
 
@@ -172,7 +190,8 @@ Conventions:
 - [ ] **HOME-01** Capability overview is one table/definition list, not icon cards. Verify: `grep -cE "<table|<dl" client/src/pages/Home.tsx` → ≥1 **and** `grep -c "CAPABILITIES.map(({ icon" client/src/pages/Home.tsx` → `0`
 - [ ] **HOME-02** Hero decorations removed. Verify: `grep -cE "grid-bg|blur-3xl|Free · open source" client/src/pages/Home.tsx` → `0` (today 3)
 - [ ] **HOME-03** Zero-valued stats are never rendered (D4). Verify: `npx playwright test --grep @state-home-stats-zero` (fixture `{totalLookups:0,totalReports:0,reportsLast24h:0,knownScams:6}` → row text is exactly "6 known scam indicators"; fixture with all four at 0 → `[data-testid=stats-row]` count is 0, no separators rendered)
-- [ ] **HOME-04** Counter persistence decided before the counters work ships (§4.2.1, Q9). Verify: `grep -c "^| D9 " docs/REDESIGN_PLAN.md` → `1`
+- [ ] **HOME-04** Counter persistence decided and recorded (D9). Verify: `grep -c "^| D9 " docs/REDESIGN_PLAN.md` → `1`
+- [ ] **HOME-05** "since last restart" qualifier (D9). Verify: `npx playwright test --grep @state-home-stats-restart` (ephemeral mode with lookups > 0 → row contains "since last restart" right after the restart-scoped stats; persistent mode → no qualifier; only `knownScams` > 0 → no qualifier)
 - [ ] **RES-01** Verdict meter is accessible and never colour-only (D5). Verify: `grep -cE 'role="meter"|aria-valuemin="0"|aria-valuemax="100"|aria-valuenow=|aria-valuetext=' client/src/components/VerdictMeter.tsx` → `5` **and** `npx playwright test --grep @verdict-meter` (asserts `aria-valuenow` = fixture score, `aria-valuetext` = "<score> out of 100, <Level>", the visible number and level label are inside the same `[data-testid=verdict-meter]` row as the bar, and the pending state has `aria-busy="true"` and no `aria-valuenow`)
 - [ ] **RES-02** Red flags capped at 5, with "Show all N" and links to `#source-<id>`. Verify: `npx playwright test --grep @red-flags`
 - [ ] **RES-03** Message targets clamp to 3 lines with "Show full message". Verify: `npx playwright test --grep @message-target`
@@ -234,8 +253,6 @@ Conventions:
 
 ## Decisions and open questions
 
-Decisions D1–D8 (2026-09-24) are recorded in the plan's decisions log and built into the items above (`SITE-*`, `CSV-*`, `CI-*`, `HOME-03`, `RES-01`, `FONT-*`).
+Decisions D1–D9 are recorded in the plan's decisions log and built into the items above (`SITE-*`, `CSV-*`, `CI-*`, `HOME-03/04/05`, `RES-01`, `FONT-*`, `STORE-*`). No questions are open.
 
-**Still open (blocks `HOME-04` only):**
-
-- **Q9 Counter persistence:** is the live Render service using the persistent disk from `render.yaml` (paid plan, `/var/data`), or Free/ephemeral storage? See plan §4.2.1 for evidence and options (a)/(b)/(c).
+Out of scope, tracked in plan §9: **FU-1** Turso/libSQL persistence.

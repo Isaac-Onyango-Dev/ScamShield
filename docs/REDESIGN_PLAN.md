@@ -10,11 +10,12 @@ Companion file: [`REDESIGN_CHECKLIST.md`](REDESIGN_CHECKLIST.md), the definition
 | D1 | Absolute site URL | Read `SITE_URL`, fall back to `RENDER_EXTERNAL_URL`; **production startup fails with a clear error if neither is set**. `og:image` and `og:url` are always absolute | §4.1.1, `SITE-*` |
 | D2 | CSV export | Keep. OWASP CSV-injection escaping (prefix `'` for leading `=`, `+`, `-`, `@`, tab, CR), quote and escape every field, UTF-8 BOM, unit tests for each dangerous prefix plus commas, quotes and newlines | §4.3.1, `CSV-*` |
 | D3 | E2E tooling | Playwright + axe. CI installs **Chromium only** (`npx playwright install --with-deps chromium`) and caches the browser directory | §5.4, §7.1, `CI-*` |
-| D4 | Home counters | Caption row; **never render a stat whose value is 0; hide the row if all are 0**. Persistence finding reported first (§4.2.1); the counters feature is **on hold** until you confirm the hosting setup | §4.2, `HOME-*` |
+| D4 | Home counters | Caption row; **never render a stat whose value is 0; hide the row if all are 0**. Persistence finding in §4.2.1; resolved by D9 (ephemeral, so a "since last restart" qualifier is added) | §4.2, `HOME-*` |
 | D5 | Score visual | Linear bar with `role="meter"`, `aria-valuemin/max/now` (+ `aria-valuetext`); numeric score and text label always shown next to the bar | §4.3, `RES-01` |
 | D6 | Fonts | Self-hosted latin-subset variable woff2, `font-display: swap`, preload **only** the primary Inter file, OFL licence files shipped, system font stacks as fallback | §3.2.1, `FONT-*` |
 | D7 | Theme toggle | Not needed. `prefers-color-scheme` only | A2 |
 | D8 | GitHub Pages redirect page | Leave as is. Out of scope | n/a |
+| D9 | Storage persistence (Q9) | The live service is a **Render Free instance with no persistent disk**. Build the counters as specified with a **"since last restart"** qualifier; show a **temporary-storage notice** wherever reports are submitted or listed, and never imply permanence. Persistence is follow-up FU-1 (§9) | §4.2.1, §4.8, §9, `HOME-05`, `STORE-*` |
 
 Workstreams, in priority order:
 
@@ -139,6 +140,7 @@ Contrast ratios were computed with the WCAG 2.x relative-luminance formula again
 | 28 | **Theme hard-coded to dark:** `class="bg-ink-950"`, `theme-color #07090d`, `color-scheme: dark` | `index.html:2,7`, `index.css:7` |
 | 29 | **Stale screenshots:** they show `0.0 s` and a mid-word monospace break that the current code no longer produces | `docs/home.png`, `docs/lookup-message.png` |
 | 30 | **Object URL revoked synchronously after `click()`**, which can cancel downloads in some browsers | `Search.tsx:47-48` |
+| 31 | **Refresh blanks the results.** "Re-scan", and the re-run after a successful report, reset `target` to `undefined`, so the header, verdict and all cards unmount until the new stream starts (§4.7) | `lib/api.ts:48-49`, `Search.tsx:71` |
 
 ---
 
@@ -368,7 +370,7 @@ scripts/
 | Search box with glow shadow and nested focus treatment | 44 px `rounded-lg` field, `border-strong` boundary, a single focus ring on the field container, type badge (accent-tint) on the right, primary button **"Look up"** (visible label at all widths; icon-only below 400 px keeps an `aria-label`) | #3, #4, #21 |
 | (no helper text) | Helper text below the field (`footnote`, tertiary): "Paste a whole message to extract links and numbers. Defanged input like hxxp://evil[.]com works." | Moves the useful parts of the "1-2-3" section to where they're needed |
 | "Try:" chips | "Examples" label + 6 `plain` buttons in `footnote` ("Phishing domain", "Email", …) | Keeps F2; quieter |
-| 4 big counters band (shows zeros) | Single `caption` row under the examples, e.g. "1,204 lookups run · 38 community reports · 6 known scam indicators". **Any stat equal to 0 is not rendered; if all four are 0 the row isn't rendered at all** (no empty container, no separators). Skeleton while loading; row hidden on error (non-critical data). Separators come from CSS so none are left dangling | Keeps F3 (decision D4). **On hold until §4.2.1 is confirmed** |
+| 4 big counters band (shows zeros) | Single `caption` row under the examples, e.g. "1,204 lookups run · 38 community reports · 6 known scam indicators". **Any stat equal to 0 is not rendered; if all four are 0 the row isn't rendered at all** (no empty container, no separators). Skeleton while loading; row hidden on error (non-critical data). Separators come from CSS so none are left dangling | Keeps F3 (decision D4). With the D9 "since last restart" qualifier when storage is ephemeral (§4.8) |
 | 6 icon-tile capability cards | One `Card` holding a two-column definition table, "What each lookup checks": type (Email, Link, Domain, IP, Phone, Message) → a comma-separated list of checks, then a "See all sources" link to `/sources` | Keeps F4. Scannable, no decorative icon tiles, about 60% less height |
 | "1. Paste anything / 2. … / 3. …" | Removed (content moved to helper text and the Sources page) | Redundant |
 
@@ -394,10 +396,14 @@ None of the four counters are held in memory. All come from the **SQLite file at
 
 I can't tell from the repo which Render plan `scamshield-dkmg.onrender.com` uses. To check in the Render dashboard, open the service and look at **Disks** (a disk mounted at `/var/data` should be listed) and at **Environment** (`DATABASE_URL` should point under that mount).
 
-**Consequence for D4 if it's ephemeral:** after every spin-down the row shows only "6 known scam indicators". It's still honest, but "lookups run" becomes meaningless. The counters work is **on hold** until you confirm one of:
+**Consequence for D4 if it's ephemeral:** after every spin-down the row shows only "6 known scam indicators". It's still honest, but "lookups run" becomes meaningless. The options were:
 - (a) persistent disk is in place, so build as specified;
-- (b) it's ephemeral and you accept resets, so build as specified and add a "since <boot time>" qualifier;
-- (c) move storage to a hosted database. That's a separate project; ARCHITECTURE.md (Scaling path) already sketches the move to Postgres.
+- (b) it's ephemeral and resets are accepted, so build as specified and add a qualifier;
+- (c) move storage to a hosted database.
+
+**Resolved (D9): option (b).** The live service runs on Render Free with no disk. The counters are built as specified with the qualifier "since last restart". Reports get the notices in §4.8. Option (c) is recorded as follow-up FU-1 (§9).
+
+The client has no boot timestamp (`/api/stats` and `shared/types.ts` stay unchanged, GATE-08), so the qualifier is the literal phrase, not a time.
 
 ### 4.3 Lookup results (`/search`), the core screen
 
@@ -525,6 +531,35 @@ Why these rules:
 | `YOUR-HOST` in examples | `window.location.origin` substituted at render | Examples work when copied |
 | Examples not copyable | `CopyButton` on each `<pre>` | Copy actions |
 | Intro paragraph | Adds a short "Rate limits" subsection: lookups per minute per IP, `RateLimit`/`Retry-After` headers | Documents the behaviour the UI now uses |
+| `POST /api/reports` description | Adds the storage sentence from §4.8 when the mode is `ephemeral` | D9 |
+
+### 4.7 Refresh keeps results on screen (audit #31)
+
+"Re-scan", and the automatic re-run after a successful report, currently **blank the whole results view**. The reducer's `reset` returns the initial state, including `target: undefined` (`lib/api.ts:48-49`), so the header, verdict and every card unmount until the new `start` event arrives. In P3, `reset` keeps the previous report and planned list, and marks the page "Refreshing…" (status region + `aria-busy` on the results) until the new `start` event replaces them.
+
+### 4.8 Temporary-storage notices (decision D9)
+
+**Mode:**
+- `STORAGE_PERSISTENT` is a new boolean env var, validated in `server/config.ts`, **default `false`**. It resolves to `storageMode` = `"ephemeral"` | `"persistent"`.
+- The default is fail-safe: the notices appear unless the operator explicitly declares persistent storage. That matches the user's Free service, which sets nothing.
+- `render.yaml`, which provisions a `/var/data` disk, sets `STORAGE_PERSISTENT: "true"`. DEPLOYMENT.md tells Docker users with a volume to set it too.
+
+**Delivery (no API change):**
+- The same runtime `<head>` injection as D1 (§4.1.1) fills `<meta name="scamshield-storage" content="%STORAGE_MODE%">`.
+- `client/src/lib/deployment.ts` reads it once.
+- A missing or unreplaced value (`%STORAGE_MODE%`) is treated as `ephemeral`, so the fallback never implies permanence.
+
+**Where it appears** (all P3–P5 UI; hidden entirely in `persistent` mode):
+
+| Surface | Treatment | Copy |
+|---|---|---|
+| Report dialog | Info `InlineAlert` directly above the Submit button, so it's read before submitting | "Reports are stored temporarily on this demo deployment and are cleared when the server restarts." |
+| Community source card (results) | `caption` line in the card footer, next to the source attribution | "Reports are stored temporarily on this demo deployment." |
+| Home stats row | The qualifier follows the restart-scoped stats (lookups run, community reports, reports in 24 h). Known scam indicators never get it, since they're re-seeded on every boot. If D4 zero-hiding leaves no restart-scoped stat, the qualifier is dropped | "1,204 lookups run · 38 community reports since last restart · 6 known scam indicators" |
+| `/api` page, `POST /api/reports` | One sentence | "On this deployment reports are stored temporarily and cleared when the server restarts." |
+| README | Configuration table row for `STORAGE_PERSISTENT` + a note in "What it does and doesn't do" | Same wording |
+
+**Copy guard:** no "permanent", "forever", "never lost" or similar anywhere in the UI or README (`STORE-05`).
 
 ---
 
@@ -574,7 +609,7 @@ These are exported but only used inside their own module (grep shows no other im
 | `wouter` | router | Keep |
 | `autoprefixer` (dev) | `postcss.config.js` (not an import, so a naive scan misses it) | Keep |
 | **Add (dev)** `@fontsource-variable/inter@5.3.0`, `@fontsource-variable/jetbrains-mono@5.3.0` | fixes #6; source for `npm run fonts:vendor` (§3.2.1) | **devDependencies**: only the vendored latin woff2 + OFL files ship; nothing is imported at runtime |
-| **Add (dev)** `@playwright/test@1.63.0`, `@axe-core/playwright@4.13.0` (latest at time of writing; pin exact) | e2e + a11y gates (D3) | `playwright.config.ts` defines **Chromium-only** projects (light, dark, mobile-375, reduced-motion). CI installs only Chromium (see §7.1). Locally, the preinstalled browser is used via `PLAYWRIGHT_BROWSERS_PATH` |
+| **Add (dev)** `@playwright/test@1.56.1`, `@axe-core/playwright@4.13.0` (pinned exact). 1.56.1 matches the Chromium build (1194) preinstalled in the cloud dev environment, so local runs need no browser download; upgrading is a one-line bump | e2e + a11y gates (D3) | `playwright.config.ts` defines **Chromium-only** projects (light, dark, mobile-375, reduced-motion). CI installs only Chromium (see §7.1). Locally, the preinstalled browser is used via `PLAYWRIGHT_BROWSERS_PATH` |
 
 No dependency is unused, so none are removed. No runtime dependency is added. No UI framework is added: the audit shows the problems are token discipline and semantics, not missing components.
 
@@ -616,7 +651,7 @@ Removed: the "works like hosted tools such as EmailOSINT" comparison, which is m
 
 | Phase | Scope | Exit criteria (checklist IDs) | Size |
 |---|---|---|---|
-| **P0 Safety net** | Add Playwright + axe; `tests/e2e/` with `page.route()` mocks for `/api/stats`, `/api/sources`, `/api/reports`, and an **SSE fixture** (`tests/e2e/fixtures/*.sse`: start/check/done built from a real report) for `/api/lookup/stream`; one test per F1–F27; axe run recorded as a **baseline** (expected failures listed, not yet blocking); `scripts/lint-design.mjs` in report-only mode; `npm run test:e2e` in CI: `actions/cache@v4` on `~/.cache/ms-playwright` keyed by `${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}`; on cache **miss** `npx playwright install --with-deps chromium`, on **hit** `npx playwright install-deps chromium` (OS packages aren't in the cache); upload the HTML report as an artifact on failure | GATE-04, FEAT-* | M |
+| **P0 Safety net** | **No application code changes.** Playwright `@playwright/test@1.56.1` + `@axe-core/playwright@4.13.0`. `tests/e2e/` specs assert behaviour through a **page-object layer** (`tests/e2e/support/app.ts`), which is the only file P2–P5 should need to touch when wording and markup change. Typed fixtures from `shared/types.ts` drive `page.route()` mocks for `/api/stats`, `/api/sources`, `/api/reports` and SSE bodies for `/api/lookup/stream`; a **catch-all guard** fails any test that reaches an unmocked `/api/*`. One tagged test per F1–F26 (`@F01`…); F27 is `tests/api.test.ts`. Axe runs as a **ratchet**: violations must be a subset of the committed `tests/e2e/a11y-baseline/`, which must be empty by P6. `scripts/lint-design.mjs` in report-only mode. CI: `actions/cache@v4` on `~/.cache/ms-playwright` keyed by `${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}`; on cache **miss** `npx playwright install --with-deps chromium`, on **hit** `npx playwright install-deps chromium` (OS packages aren't in the cache); upload the HTML report on failure | GATE-04, FEAT-*, E2E-* | M |
 | **P1 Foundation** | `tokens.css`, `base.css`, `fonts.css` + `npm run fonts:vendor` (§3.2.1), `check-contrast.mjs`; Tailwind **extend** mapping (old classes still compile); primitives in `components/ui/` | TOK-*, A11Y-02 | M |
 | **P2 Shell** | Layout, skip link, Logo placeholder (`currentColor` wordmark), footer, 404, `index.html` colour-scheme metas; **site URL resolution + `<head>` injection** (§4.1.1), with `SITE_URL=` in `.env.example` and DEPLOYMENT.md | A11Y-05/06, SHELL-* | S |
 | **P3 Results** | Search page, VerdictPanel, CheckCard, overview table, filter, states, fallback-fetch fix, CSV export, ReportDialog | STATE-*, RES-*, A11Y-* on `/search` | L |
@@ -643,7 +678,7 @@ Order rationale: the safety net comes first because streaming UI regresses silen
 | **Existing self-hosted deploys stop starting** (no `SITE_URL`) | High for Docker/VPS users | High | Clear error text naming both variables; `.env.example`, DEPLOYMENT.md Docker example and production checklist updated in the same PR; release note. Render is unaffected (`RENDER_EXTERNAL_URL`) |
 | Placeholder leak: `/index.html` served raw with `%SITE_URL%` | Medium | Medium | Explicit route for `/index.html`; `SITE-04` curls it |
 | CSV opened in a spreadsheet executes attacker text | Low after D2 | High | OWASP prefixing + full quoting + 17 named unit tests (§4.3.1) |
-| Counters reset on ephemeral hosting | Unknown (§4.2.1) | Medium | Counters work on hold until hosting is confirmed |
+| Counters and reports reset on ephemeral hosting | Certain on the live Render Free service (D9) | Medium | "since last restart" qualifier and storage notices (§4.8); persistence is FU-1 (§9) |
 | Scope creep (new features during redesign) | Medium | Medium | Only CSV export (D2) and the findings filter are new; both are listed |
 
 ---
@@ -691,8 +726,43 @@ The PNGs are rasterised once from the SVG sources with `npx --yes @resvg/resvg-j
 
 ---
 
+## 9. Follow-ups (out of this redesign's scope)
+
+### FU-1 Migrate DATABASE_URL to a hosted SQLite-compatible database (Turso/libSQL) so reports and counters persist
+
+**Why:** the live service runs on Render Free, whose filesystem is ephemeral (§4.2.1, D9). Community reports, lookup counters and the lookup cache are lost on every deploy, restart and spin-down. libSQL speaks the SQLite dialect, so the schema and migrations carry over unchanged.
+
+**The core change:** `better-sqlite3` is **synchronous**; `@libsql/client` is **asynchronous**. Every store method becomes `async` and every call site gains an `await`. The HTTP API and `shared/types.ts` stay the same.
+
+| File | Change |
+|---|---|
+| `server/lib/db.ts` | `createClient({ url: DATABASE_URL, authToken: DATABASE_AUTH_TOKEN })` + `drizzle(client, { schema })` from `drizzle-orm/libsql`; migrator from `drizzle-orm/libsql/migrator` (async); drop the `journal_mode = WAL` and `busy_timeout` pragmas (not applicable remotely), keep `PRAGMA foreign_keys = ON`; `DB` type → `LibSQLDatabase<typeof schema>`; return `{ db, client }` |
+| `server/lib/community.ts` | Every `.get()` / `.all()` / `.run()` / `.returning()` awaited; `db.transaction((tx) => …)` → `await db.transaction(async (tx) => …)`; `lookup()` is already async; `submit()`, `stats()` and `bumpStat()` return Promises |
+| `server/lib/reportCache.ts` | `ReportCache.get/set/invalidate/purgeExpired` become async |
+| `server/engine/lookup.ts` | `await deps.cache.get(...)` (line 45) and `await deps.cache.set(...)` (line 84); `onLookup` may return a Promise |
+| `server/routes/api.ts` | `await community.submit(...)` (line 114), `await cache.invalidate(...)` (line 121), `res.json(await community.stats())` (line 137). Responses are unchanged, but this PR is an explicit GATE-08 exception |
+| `server/index.ts` | Top-level `await runMigrations(...)` / `await seed(...)` (lines 25-27); the purge interval awaits `cache.purgeExpired()` (lines 64-67); shutdown calls `client.close()` instead of `sqlite.close()` (line 76) |
+| `server/seed.ts`, `server/seed-cli.ts` | Async |
+| `server/config.ts` | `DATABASE_URL` accepts `libsql://…`, `https://…` and `file:…`; new optional secret `DATABASE_AUTH_TOKEN` |
+| `drizzle.config.ts` | `dialect: "turso"` with `dbCredentials: { url, authToken }` |
+| `tests/api.test.ts`, `tests/helpers.ts` | In-memory libSQL (`:memory:`) with awaited setup |
+| `package.json` / lockfile | `+ @libsql/client`; `− better-sqlite3`, `− @types/better-sqlite3` |
+| `Dockerfile` | Drop the `python3 make g++` build dependencies (only needed to compile better-sqlite3) |
+| `render.yaml` | `DATABASE_URL` = the libsql URL, `DATABASE_AUTH_TOKEN` with `sync: false` (secret), `STORAGE_PERSISTENT: "true"`; the disk becomes optional |
+| `.env.example`, DEPLOYMENT.md, ARCHITECTURE.md | Document the new variables (names only) and the storage model |
+
+**Unchanged:** `shared/schema.ts` and the SQL in `migrations/`, which use the same SQLite dialect.
+
+**Considerations:**
+- Every query becomes a network round trip. Put the Turso database in the region nearest the Render service, or use an embedded replica (`syncUrl` + local file) for fast reads.
+- Check the free-tier row/storage quotas.
+- The in-memory rate limiter still resets on restart, which is acceptable.
+- Consider keeping `lookup_cache` local and only moving reports and statistics, if latency matters.
+
+**Done when:** a submitted report and the lookup counter survive a manual redeploy on Render Free, and `STORAGE_PERSISTENT=true` hides every notice from §4.8.
+
+---
+
 ## Open questions
 
-Q1–Q8 were answered on 2026-09-24 (see the decisions log at the top). One item is **blocking** before the home counters are built:
-
-- **Q9 Counter persistence (§4.2.1):** is the live Render service on a paid plan with the `/var/data` disk from `render.yaml`, or on Free/ephemeral storage? Reply (a), (b) or (c) as listed in §4.2.1.
+None. Q1–Q9 are answered; see the decisions log (D1–D9) at the top.
