@@ -1,0 +1,84 @@
+/* Element defaults, focus, materials and motion (docs/REDESIGN_PLAN.md §3). */
+@layer base {
+    html {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-size-adjust: 100%;
+    }
+    body {
+        min-height: 100vh;
+        margin: 0;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-family: var(--font-sans);
+        font-size: var(--font-size-body);
+        line-height: var(--line-height-body);
+        font-feature-settings: "cv11", "ss01";
+    }
+    code,
+    kbd,
+    pre,
+    samp {
+        font-family: var(--font-mono);
+        font-variant-ligatures: none;
+    }
+    ::selection {
+        background: var(--color-accent-tint);
+        color: var(--color-text);
+    }
+    /* One visible focus indicator everywhere (WCAG 2.4.7 / 2.4.11). */
+    :focus-visible {
+        outline: 2px solid var(--color-focus);
+        outline-offset: 2px;
+    }
+}
+
+@layer components {
+    /* The search field shows the ring on its container; its textarea therefore doesn't draw a second one. */
+    .search-field:focus-within {
+        outline: 2px solid var(--color-focus);
+        outline-offset: 2px;
+    }
+    .search-field textarea:focus-visible {
+        outline: none;
+    }
+    /* The only translucent material: the sticky header. */
+    .header-material {
+        background: var(--material-header);
+        -webkit-backdrop-filter: saturate(180%) blur(12px);
+        backdrop-filter: saturate(180%) blur(12px);
+    }
+    .tabular {
+        font-variant-numeric: tabular-nums;
+    }
+    dialog::backdrop {
+        background: var(--backdrop);
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Respect the user's motion preference: nothing moves, nothing transitions. */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0s !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0s !important;
+        scroll-behavior: auto !important;
+    }
+}

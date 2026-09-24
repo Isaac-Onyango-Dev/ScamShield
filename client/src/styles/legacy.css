@@ -1,26 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-    :root {
-        color-scheme: dark;
-    }
-    html {
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-    }
-    body {
-        @apply bg-ink-950 text-slate-200 font-sans min-h-screen;
-    }
-    ::selection {
-        @apply bg-brand-500/30 text-white;
-    }
-    :focus-visible {
-        @apply outline-none ring-2 ring-brand-400/70 ring-offset-2 ring-offset-ink-950;
-    }
-}
-
+/* Legacy component classes kept only until the P6 cleanup sweep (docs/REDESIGN_PLAN.md §7.1). */
 @layer components {
     .panel {
         @apply rounded-2xl border border-white/[0.06] bg-ink-900/80 backdrop-blur-sm;
@@ -43,14 +21,5 @@
             linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
         background-size: 44px 44px;
         mask-image: radial-gradient(ellipse at top, black 30%, transparent 75%);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.01ms !important;
     }
 }

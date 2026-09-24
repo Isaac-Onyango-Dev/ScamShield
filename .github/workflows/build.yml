@@ -28,6 +28,9 @@ jobs:
       - name: Tests
         run: npm test
 
+      - name: Contrast (WCAG 2.2 AA token pairs)
+        run: npm run check:contrast
+
       - name: Build
         run: npm run build
 

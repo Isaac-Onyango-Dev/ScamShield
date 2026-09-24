@@ -1,0 +1,96 @@
+/*
+ * Design tokens (docs/REDESIGN_PLAN.md §3). The ONLY place colours and raw values live:
+ * components use them through tailwind.config.ts. Light is the default; dark follows the OS.
+ * Contrast of every text/background pair is verified by scripts/check-contrast.mjs.
+ */
+:root {
+    color-scheme: light dark;
+
+    /* Colour: one accent + success / warning / danger */
+    --color-bg: #F5F5F7;
+    --color-surface: #FFFFFF;
+    --color-surface-2: #F5F5F7;
+    --color-text: #1D1D1F;
+    --color-text-secondary: #4A4A4F;
+    --color-text-tertiary: #6B6B70;
+    --color-border: #E3E3E8;
+    --color-border-strong: #8A8A8F;
+    --color-accent: #0A66C2;
+    --color-accent-hover: #0858A8;
+    --color-accent-tint: #E8F1FB;
+    --color-on-accent: #FFFFFF;
+    --color-success: #1A7F37;
+    --color-success-tint: #E9F6EC;
+    --color-warning: #8A5C00;
+    --color-warning-tint: #FFF6E0;
+    --color-danger: #C9252D;
+    --color-danger-tint: #FDECEC;
+    --color-on-danger: #FFFFFF;
+    --color-focus: #0A66C2;
+
+    /* Type: one sans, one mono, eight steps */
+    --font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --font-size-caption: 12px;
+    --line-height-caption: 16px;
+    --font-size-footnote: 13px;
+    --line-height-footnote: 20px;
+    --font-size-body: 15px;
+    --line-height-body: 24px;
+    --font-size-headline: 17px;
+    --line-height-headline: 24px;
+    --font-size-title-3: 20px;
+    --line-height-title-3: 28px;
+    --font-size-title-2: 24px;
+    --line-height-title-2: 32px;
+    --font-size-title-1: 32px;
+    --line-height-title-1: 40px;
+    --font-size-display: 48px;
+    --line-height-display: 56px;
+
+    /* Radius */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+
+    /* Motion: UI feedback never exceeds 200ms */
+    --duration-fast: 100ms;
+    --duration-base: 150ms;
+    --duration-slow: 200ms;
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
+    /* Depth */
+    --shadow-overlay: 0 8px 24px rgb(0 0 0 / 0.12), 0 0 0 1px var(--color-border);
+    --material-header: rgb(245 245 247 / 0.8);
+    --backdrop: rgb(0 0 0 / 0.4);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --color-bg: #0E0F11;
+        --color-surface: #17181B;
+        --color-surface-2: #202125;
+        --color-text: #F2F2F4;
+        --color-text-secondary: #B4B4BB;
+        --color-text-tertiary: #8E8E96;
+        --color-border: #2A2B30;
+        --color-border-strong: #6C6D75;
+        --color-accent: #4C9AFF;
+        --color-accent-hover: #6AADFF;
+        --color-accent-tint: #122338;
+        --color-on-accent: #0E0F11;
+        --color-success: #3FB950;
+        --color-success-tint: #13251A;
+        --color-warning: #D29922;
+        --color-warning-tint: #2A2112;
+        --color-danger: #F26B6B;
+        --color-danger-tint: #2A1618;
+        --color-on-danger: #0E0F11;
+        --color-focus: #4C9AFF;
+
+        --shadow-overlay: 0 8px 24px rgb(0 0 0 / 0.5), 0 0 0 1px var(--color-border);
+        --material-header: rgb(14 15 17 / 0.8);
+        --backdrop: rgb(0 0 0 / 0.6);
+    }
+}
