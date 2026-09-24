@@ -84,7 +84,7 @@ const breaches: CheckResult = {
     summary: "Source unavailable",
     facts: [],
     signals: [],
-    error: "Rate limited by upstream source — try again shortly",
+    error: "Timed out after 8000 ms",
     source: { name: "XposedOrNot", url: "https://xposedornot.com" },
     durationMs: 800,
 };

@@ -1,92 +1,83 @@
-import { Sparkles, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useState } from "react";
 import type { LookupReport, Signal } from "@shared/types";
-import { RiskGauge } from "./RiskGauge";
-import { cn, LEVEL_STYLES, SEVERITY_DOT } from "@/lib/ui";
+import { Card } from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
+import { SignalList } from "./SignalList";
+import { VerdictMeter } from "./VerdictMeter";
 
-function SignalList({ signals, trust }: { signals: Signal[]; trust?: boolean }) {
+const TOP = 5;
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
     return (
-        <ul className="space-y-2">
-            {signals.map((s) => (
-                <li key={s.id} className="flex items-start gap-2 text-sm leading-snug">
-                    <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", trust ? "bg-emerald-400" : SEVERITY_DOT[s.severity])} />
-                    <span className="text-slate-200">{s.label}</span>
-                </li>
-            ))}
-        </ul>
+        <section className="flex flex-col gap-2 border-t border-line pt-4">
+            <h3 className="text-footnote font-semibold text-fg">{title}</h3>
+            {children}
+        </section>
     );
 }
 
-interface Props {
-    report?: LookupReport;
-    progress: { done: number; total: number };
+/** Links a verdict signal to the source card that produced it. */
+function cardHref(report: LookupReport) {
+    return (signal: Signal) => {
+        const check = report.checks.find((c) => c.signals.some((s) => s.id === signal.id && s.label === signal.label));
+        return check ? `#source-${check.id}` : undefined;
+    };
 }
 
-export function VerdictPanel({ report, progress }: Props) {
+export function VerdictPanel({ report, sources }: { report?: LookupReport; sources: number }) {
+    const [allFlags, setAllFlags] = useState(false);
     const verdict = report?.verdict;
-    const level = verdict?.level ?? "safe";
-    const style = LEVEL_STYLES[level];
+    const noData = verdict?.confidence === 0;
+    const flags = verdict?.topSignals ?? [];
     return (
-        <section className={cn("panel p-6", verdict && `ring-1 ${style.ring}`)} aria-live="polite">
-            <RiskGauge score={verdict ? verdict.score : null} level={level} />
-            <div className="mt-3 text-center">
-                {verdict ? (
-                    <>
-                        <p className={cn("text-xl font-bold", style.text)}>{verdict.label}</p>
-                        <p className="mt-1 text-xs text-slate-500">
-                            Confidence {Math.round(verdict.confidence * 100)}% · {progress.total} sources
-                        </p>
-                    </>
-                ) : (
-                    <>
-                        <p className="text-lg font-semibold text-slate-300">Investigating…</p>
-                        <p className="mt-1 text-xs tabular-nums text-slate-500">
-                            {progress.done} / {progress.total} sources answered
-                        </p>
-                    </>
-                )}
-            </div>
-            <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/5">
-                <div
-                    className="h-full rounded-full bg-brand-400 transition-all duration-500"
-                    style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }}
-                />
-            </div>
+        <Card as="section" aria-label="Verdict" className="flex flex-col gap-4 p-5">
+            {noData ? (
+                <div className="flex flex-col gap-1">
+                    <p className="text-footnote font-semibold text-fg-secondary">Risk score</p>
+                    <p className="text-title-3 font-semibold text-fg">Not enough data</p>
+                    <p className="text-footnote text-fg-secondary">No source answered. Try again later.</p>
+                </div>
+            ) : (
+                <VerdictMeter score={verdict ? verdict.score : null} level={verdict?.level ?? "low"} label={verdict?.label ?? ""} />
+            )}
+            {verdict && (
+                <p className="text-caption text-fg-tertiary">
+                    Confidence {Math.round(verdict.confidence * 100)}% · {sources} sources
+                </p>
+            )}
 
             {report && (
-                <div className="mt-6 space-y-6">
-                    <div>
-                        <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                            {report.summary.generatedBy === "ai" && <Sparkles className="h-3.5 w-3.5 text-brand-300" />}
-                            Assessment
-                        </h3>
-                        <p className="text-sm leading-relaxed text-slate-300">{report.summary.text}</p>
-                    </div>
-                    {verdict!.topSignals.length > 0 && (
-                        <div>
-                            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                <ShieldAlert className="h-3.5 w-3.5" /> Red flags
-                            </h3>
-                            <SignalList signals={verdict!.topSignals} />
-                        </div>
+                <>
+                    <Section title="Summary">
+                        <p className="text-caption text-fg-tertiary">
+                            {report.summary.generatedBy === "ai" ? "Written by AI · the score is rule-based" : "Generated from rules"}
+                        </p>
+                        <p className="text-footnote text-fg-secondary">{report.summary.text}</p>
+                    </Section>
+                    {flags.length > 0 && (
+                        <Section title={`Red flags (${flags.length})`}>
+                            <SignalList signals={allFlags ? flags : flags.slice(0, TOP)} hrefFor={cardHref(report)} />
+                            {flags.length > TOP && (
+                                <Button variant="plain" size="sm" className="self-start" onClick={() => setAllFlags(!allFlags)} aria-expanded={allFlags}>
+                                    {allFlags ? "Show fewer" : `Show all ${flags.length}`}
+                                </Button>
+                            )}
+                        </Section>
                     )}
                     {verdict!.trustSignals.length > 0 && (
-                        <div>
-                            <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
-                                <ShieldCheck className="h-3.5 w-3.5" /> Trust signals
-                            </h3>
-                            <SignalList signals={verdict!.trustSignals} trust />
-                        </div>
+                        <Section title="Trust signals">
+                            <SignalList signals={verdict!.trustSignals} hrefFor={cardHref(report)} />
+                        </Section>
                     )}
-                    <div>
-                        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">What to do</h3>
-                        <ol className="list-decimal space-y-1.5 pl-5 text-sm text-slate-300 marker:text-slate-500">
+                    <Section title="What to do">
+                        <ol className="flex list-decimal flex-col gap-1 pl-5 text-footnote text-fg-secondary marker:text-fg-tertiary">
                             {report.summary.recommendations.map((r) => (
                                 <li key={r}>{r}</li>
                             ))}
                         </ol>
-                    </div>
-                </div>
+                    </Section>
+                </>
             )}
-        </section>
+        </Card>
     );
 }

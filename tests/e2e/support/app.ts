@@ -54,32 +54,47 @@ export class App {
 
     // ── Search input (Home + Search) ─────────────────────────────────────────
     searchInput(): Locator {
-        return this.page.getByRole("textbox", { name: "What do you want to investigate?" });
+        return this.page.getByRole("textbox", { name: "Email, link, domain, IP, phone number or message" });
     }
 
     submitButton(): Locator {
-        return this.page.locator("form").getByRole("button", { name: "Investigate" });
+        return this.page.getByRole("search").getByRole("button", { name: "Look up" });
     }
 
     /** Live type badge next to the field; resolves to its label text (e.g. "Email"). */
     typeBadge(): Locator {
-        return this.page.locator("form .chip");
+        return this.page.getByRole("search").locator("span.bg-accent-tint");
+    }
+
+    /** Validation message shown under the field (HTTP 400). */
+    fieldError(): Locator {
+        return this.page.getByRole("search").locator("p.text-danger");
     }
 
     exampleLink(label: (typeof EXAMPLE_LABELS)[number]): Locator {
-        return this.page.getByRole("link", { name: label, exact: true });
+        return this.page.getByRole("main").getByRole("link", { name: label, exact: true });
     }
 
     // ── Home ─────────────────────────────────────────────────────────────────
     statsRegion(): Locator {
-        return this.page.locator("section").filter({ hasText: "Lookups run" });
+        return this.page.getByTestId("stats-row");
+    }
+
+    capabilityTable(): Locator {
+        return this.page.getByTestId("capabilities");
     }
 
     async capabilityGroups(): Promise<{ title: string; points: number }[]> {
-        const section = this.page.locator("section").filter({ has: this.page.getByRole("heading", { level: 2, name: /intelligence sources/ }) });
-        return section.locator("h3").evaluateAll((hs) =>
-            hs.map((h) => ({ title: h.textContent?.trim() ?? "", points: h.parentElement?.querySelectorAll("li").length ?? 0 })),
+        return this.page.getByTestId("capabilities").locator("tbody tr").evaluateAll((rows) =>
+            rows.map((r) => ({
+                title: r.querySelector("th")?.textContent?.trim() ?? "",
+                points: (r.querySelector("td")?.textContent ?? "").split(",").filter((p) => p.trim()).length,
+            })),
         );
+    }
+
+    emptyState(title: string): Locator {
+        return this.page.getByRole("main").getByText(title, { exact: true });
     }
 
     // ── Results ──────────────────────────────────────────────────────────────
@@ -89,83 +104,153 @@ export class App {
 
     /** Type label in the results header (not the live badge inside the search field). */
     targetType(label: string): Locator {
-        return this.page.locator("div.min-w-0", { has: this.targetHeading() }).locator(".chip", { hasText: new RegExp(`^${label}$`) });
+        return this.page.getByTestId("target-type").filter({ hasText: new RegExp(`^${label}$`) });
     }
 
     cachedBadge(): Locator {
-        return this.page.getByText(/^cached · /);
+        return this.page.getByTestId("cached-badge");
+    }
+
+    durationBadge(): Locator {
+        return this.page.getByTestId("duration");
+    }
+
+    checkedAt(): Locator {
+        return this.page.locator("time[datetime]");
+    }
+
+    showFullMessage(): Locator {
+        return this.page.getByRole("button", { name: "Show full message" });
+    }
+
+    lookupStatus(): Locator {
+        return this.page.getByRole("main").locator('p[role="status"]');
+    }
+
+    lookupProgress(): Locator {
+        return this.page.getByRole("progressbar", { name: "Sources answered" });
+    }
+
+    lookupAlert(): Locator {
+        return this.page.getByRole("main").locator("[data-tone]").first();
+    }
+
+    rateLimitCountdown(): Locator {
+        return this.page.getByTestId("rate-limit-countdown");
+    }
+
+    alertAction(name: "Retry" | "Try again"): Locator {
+        return this.page.getByRole("main").getByRole("button", { name, exact: true });
     }
 
     lookupError(): Locator {
-        return this.page.getByText("Lookup failed");
+        return this.page.getByRole("main").locator('[role="alert"]').first();
     }
 
     copyLinkButton(): Locator {
-        return this.page.getByRole("button", { name: "Share" });
+        return this.page.getByRole("button", { name: "Copy link" });
     }
 
     exportJsonButton(): Locator {
-        return this.page.getByRole("button", { name: "JSON" });
+        return this.page.getByRole("group", { name: "Export report" }).getByRole("button", { name: "JSON" });
+    }
+
+    exportCsvButton(): Locator {
+        return this.page.getByRole("group", { name: "Export report" }).getByRole("button", { name: "CSV" });
     }
 
     refreshButton(): Locator {
-        return this.page.getByRole("button", { name: "Re-scan" });
+        return this.page.getByRole("button", { name: "Refresh" });
     }
 
     reportButton(): Locator {
-        return this.page.getByRole("button", { name: "Report", exact: true });
+        return this.page.getByRole("button", { name: "Report…", exact: true });
     }
 
     verdict(): Locator {
-        return this.page.locator("aside section").first();
+        return this.page.getByRole("region", { name: "Verdict" });
     }
 
     verdictAside(): Locator {
         return this.page.locator("aside").first();
     }
 
+    verdictMeter(): Locator {
+        return this.page.getByRole("meter", { name: "Risk score" });
+    }
+
     /** Numeric score once scored, or null while pending. */
     async score(): Promise<number | null> {
-        const name = (await this.verdict().getByRole("img", { name: /Risk score|Scoring in progress/ }).getAttribute("aria-label")) ?? "";
-        const m = /Risk score (\d+)/.exec(name);
-        return m ? Number(m[1]) : null;
+        const now = await this.verdictMeter().getAttribute("aria-valuenow");
+        return now === null ? null : Number(now);
     }
 
     scorePending(): Locator {
-        return this.verdict().getByRole("img", { name: "Scoring in progress" });
+        return this.page.locator('[role="meter"][aria-busy="true"]');
     }
 
     verdictLabel(label: string): Locator {
-        return this.verdict().getByText(label, { exact: true });
+        return this.verdict().locator("[data-level]").filter({ hasText: new RegExp(`^${label}$`) });
+    }
+
+    notEnoughData(): Locator {
+        return this.verdict().getByText("Not enough data", { exact: true });
     }
 
     verdictMeta(): Locator {
         return this.verdict().getByText(/Confidence \d+%/);
     }
 
+    /** "n of m sources" as shown in the status line, header meta or error alert. */
     progressText(done: number, total: number): Locator {
-        return this.verdict().getByText(`${done} / ${total} sources answered`);
+        return this.page.getByRole("main").getByText(new RegExp(`\\b${done} of ${total} sources`)).first();
     }
 
     aiIndicator(): Locator {
-        return this.verdict().locator("svg.lucide-sparkles");
+        return this.verdict().getByText("Written by AI · the score is rule-based");
     }
 
     verdictSection(name: "summary" | "redFlags" | "trust" | "recommendations"): Locator {
-        const title = { summary: "Assessment", redFlags: "Red flags", trust: "Trust signals", recommendations: "What to do" }[name];
-        return this.verdict().locator("div").filter({ has: this.page.getByRole("heading", { level: 3, name: title }) }).last();
+        const title = { summary: /^Summary$/, redFlags: /^Red flags/, trust: /^Trust signals$/, recommendations: /^What to do$/ }[name];
+        return this.verdict().locator("section").filter({ has: this.page.getByRole("heading", { level: 3, name: title }) });
+    }
+
+    redFlags(): Locator {
+        return this.verdictSection("redFlags").locator("li");
+    }
+
+    redFlagLinks(): Promise<(string | null)[]> {
+        return this.redFlags().locator("a").evaluateAll((as) => as.map((a) => a.getAttribute("href")));
+    }
+
+    verdictMeterRow(): Locator {
+        return this.verdict().getByTestId("verdict-meter");
+    }
+
+    /** Every element carrying a status, level or severity (each must also be written as a word). */
+    statusWords(): Locator {
+        return this.page.locator("[data-status], [data-level], [data-severity]");
+    }
+
+    /** Result text of a CopyButton ("Copied" / "Couldn't copy") within a scope. */
+    copyFeedback(scope: Locator | Page, text: "Copied" | "Couldn't copy"): Locator {
+        return scope.getByText(text, { exact: true }).first();
+    }
+
+    redFlagShowAll(count: number): Locator {
+        return this.verdictSection("redFlags").getByRole("button", { name: `Show all ${count}` });
     }
 
     sourceCards(): Locator {
-        return this.page.locator("article");
+        return this.page.getByTestId("source-card");
     }
 
     sourceCard(name: string): Locator {
-        return this.page.locator("article").filter({ has: this.page.getByRole("heading", { level: 3, name, exact: true }) });
+        return this.sourceCards().filter({ has: this.page.getByRole("heading", { level: 3, name, exact: true }) });
     }
 
     pendingSources(): Locator {
-        return this.page.getByText("Querying source…");
+        return this.page.getByTestId("pending-source");
     }
 
     async categoryOrder(): Promise<CheckCategory[]> {
@@ -178,12 +263,12 @@ export class App {
     }
 
     showAllButton(count: number): Locator {
-        return this.page.getByRole("button", { name: `Show all ${count}` });
+        return this.page.getByTestId("source-card").getByRole("button", { name: `Show all ${count}` });
     }
 
     /** Result items (profiles, extracted indicators, pivots) rendered inside a card. */
     cardItems(card: Locator): Locator {
-        return card.locator(":scope > div.grid > *");
+        return card.getByTestId("card-items").locator(":scope > li");
     }
 
     cardLink(card: Locator, name: string | RegExp): Locator {
@@ -195,24 +280,36 @@ export class App {
     }
 
     cardSourceAttribution(card: Locator): Locator {
-        return card.locator("footer").getByText(/^Source: |^ScamShield analysis$/);
+        return card.getByTestId("source-attribution");
     }
 
     cardDuration(card: Locator, ms: number): Locator {
-        return card.locator("footer").getByText(`${ms} ms`);
+        return card.getByText(`Answered in ${ms} ms`);
     }
 
     cardStatus(card: Locator, label: string): Locator {
-        return card.locator("header").getByText(label, { exact: true });
+        return card.locator("header [data-status]").filter({ hasText: new RegExp(`^${label}$`) });
+    }
+
+    cardCopyButton(card: Locator, factLabel: string): Locator {
+        return card.getByRole("button", { name: `Copy ${factLabel}` });
+    }
+
+    findingRows(): Locator {
+        return this.page.getByTestId("finding-row");
+    }
+
+    findingsFilter(name: "All" | "Flags" | "Clean" | "Unavailable"): Locator {
+        return this.page.getByRole("radiogroup", { name: "Filter findings" }).getByRole("radio", { name: new RegExp(`^${name}\\b`) });
+    }
+
+    async selectFilter(name: "All" | "Flags" | "Clean" | "Unavailable") {
+        await this.page.getByRole("radiogroup", { name: "Filter findings" }).locator("label", { has: this.page.getByRole("radio", { name: new RegExp(`^${name}\\b`) }) }).click();
     }
 
     /** In-app link produced by a source (e.g. an indicator extracted from a message). */
     internalLink(href: string): Locator {
-        return this.page.locator(`a[href="${href}"]`);
-    }
-
-    durationBadge(): Locator {
-        return this.page.getByText(/^\d+\.\d s$/);
+        return this.page.locator(`a[href="${href}"]`).first();
     }
 
     // ── Report dialog ────────────────────────────────────────────────────────
@@ -221,18 +318,20 @@ export class App {
     }
 
     categoryOption(c: ReportCategory): Locator {
-        return this.reportDialog().getByRole("button", { name: c, exact: true });
+        return this.reportDialog().getByRole("radio", { name: c, exact: true });
+    }
+
+    /** Chooses a category the way a user does: by clicking its visible label. */
+    async selectCategory(c: ReportCategory) {
+        await this.reportDialog().locator("label", { has: this.page.getByRole("radio", { name: c, exact: true }) }).click();
     }
 
     categoryOptions(): Locator {
-        return this.reportDialog().locator("button[type=button].capitalize");
+        return this.reportDialog().getByRole("radio");
     }
 
     async selectedCategory(): Promise<string | null> {
-        return this.categoryOptions().evaluateAll((bs) => {
-            const pressed = bs.find((b) => b.getAttribute("aria-checked") === "true" || b.getAttribute("aria-pressed") === "true" || b.className.includes("bg-rose-500/15"));
-            return pressed?.textContent?.trim() ?? null;
-        });
+        return this.categoryOptions().evaluateAll((inputs) => (inputs as HTMLInputElement[]).find((i) => i.checked)?.value ?? null);
     }
 
     reportDescription(): Locator {
@@ -243,13 +342,22 @@ export class App {
         return this.reportDialog().getByRole("button", { name: "Submit report" });
     }
 
+    storageNotice(): Locator {
+        return this.page.getByText(/Reports are stored temporarily on this demo deployment/).first();
+    }
+
     // ── Sources / API ────────────────────────────────────────────────────────
     sourceRow(name: string): Locator {
-        return this.page.getByRole("main").locator("div.flex-col").filter({ has: this.page.getByText(name, { exact: true }) }).first();
+        return this.page.getByTestId("source-row").filter({ has: this.page.getByText(name, { exact: true }) }).first();
+    }
+
+    /** Category heading of the group a source is listed under. */
+    sourceRowCategory(name: string): Promise<string> {
+        return this.sourceRow(name).evaluate((row) => row.closest("section")?.querySelector("h2")?.textContent?.trim() ?? "");
     }
 
     sourceUpstreamLink(row: Locator, name: string): Locator {
-        return row.getByRole("link", { name, exact: true });
+        return row.getByRole("link", { name: `Source: ${name}`, exact: true });
     }
 
     rowText(row: Locator, text: string | RegExp): Locator {
@@ -257,7 +365,7 @@ export class App {
     }
 
     aiSummariesFlag(): Locator {
-        return this.page.getByText(/AI-written summaries: enabled/);
+        return this.page.getByText(/Summaries are written by AI/);
     }
 
     /** Opens the API docs page (moved from /api to /api-docs so direct loads work, audit #32). */
@@ -268,6 +376,23 @@ export class App {
 
     async endpointPaths(): Promise<string[]> {
         return this.page.getByRole("main").locator("code").filter({ hasText: /^\/api\// }).allTextContents();
+    }
+
+    // ── Focus ────────────────────────────────────────────────────────────────
+    focusedText(): Promise<string> {
+        return this.page.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
+    }
+
+    focusedId(): Promise<string> {
+        return this.page.evaluate(() => document.activeElement?.id ?? "");
+    }
+
+    /** True when focus is inside the open dialog (or has left the page for browser UI). */
+    focusIsInsideDialog(): Promise<boolean> {
+        return this.page.evaluate(() => {
+            const active = document.activeElement;
+            return !active || active === document.body || !!active.closest("dialog[open]");
+        });
     }
 
     // ── Document / motion ────────────────────────────────────────────────────

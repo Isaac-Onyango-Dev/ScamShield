@@ -1,32 +1,30 @@
-import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { ArrowRight, Loader2, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { detectType, TYPE_LABELS } from "@shared/detect";
-import { cn } from "@/lib/ui";
-
-export const EXAMPLES = [
-    { label: "Phishing domain", q: "paypal-secure-login.xyz" },
-    { label: "Email", q: "support.paypal@gmail.com" },
-    { label: "Short link", q: "https://bit.ly/3xYz" },
-    { label: "Phone", q: "+1 888 123 4567" },
-    { label: "IP", q: "185.220.101.1" },
-    {
-        label: "SMS",
-        q: "URGENT: Your account has been suspended. Verify your identity within 24 hours at http://amaz0n-verify.top/login or it will be closed.",
-    },
-];
+import { cn } from "@/lib/cn";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { Spinner } from "@/components/ui/Spinner";
 
 interface Props {
     initial?: string;
     size?: "lg" | "md";
     busy?: boolean;
-    autoFocus?: boolean;
+    /** Disables submitting, e.g. while a rate limit counts down. */
+    disabled?: boolean;
+    /** Validation message from the server, shown under the field. */
+    error?: string;
+    helper?: ReactNode;
 }
 
-export function SearchBox({ initial = "", size = "lg", busy, autoFocus }: Props) {
+export const SEARCH_LABEL = "Email, link, domain, IP, phone number or message";
+
+export function SearchBox({ initial = "", size = "lg", busy, disabled, error, helper }: Props) {
     const [value, setValue] = useState(initial);
     const [, navigate] = useLocation();
     const ref = useRef<HTMLTextAreaElement>(null);
+    const ids = { input: useId(), helper: useId(), error: useId() };
     const detected = value.trim() ? detectType(value) : null;
 
     useEffect(() => setValue(initial), [initial]);
@@ -40,7 +38,7 @@ export function SearchBox({ initial = "", size = "lg", busy, autoFocus }: Props)
     function submit(e?: FormEvent) {
         e?.preventDefault();
         const q = value.trim();
-        if (q) navigate(`/search?q=${encodeURIComponent(q)}`);
+        if (q && !disabled) navigate(`/search?q=${encodeURIComponent(q)}`);
     }
 
     function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
@@ -50,40 +48,47 @@ export function SearchBox({ initial = "", size = "lg", busy, autoFocus }: Props)
         }
     }
 
+    const describedBy = [helper ? ids.helper : null, error ? ids.error : null].filter(Boolean).join(" ") || undefined;
     return (
-        <form onSubmit={submit} className="w-full">
-            <div
-                className={cn(
-                    "group relative flex items-start gap-3 rounded-2xl border border-white/10 bg-ink-850/90 shadow-2xl shadow-black/40 transition focus-within:border-brand-400/50 focus-within:shadow-brand-500/5",
-                    size === "lg" ? "p-2.5 pl-5" : "p-1.5 pl-4",
-                )}
-            >
-                <Search className={cn("shrink-0 text-slate-500", size === "lg" ? "mt-3.5 h-5 w-5" : "mt-2.5 h-4 w-4")} />
+        <form onSubmit={submit} className="flex w-full flex-col gap-2" role="search">
+            <label htmlFor={ids.input} className="sr-only">
+                {SEARCH_LABEL}
+            </label>
+            <div className={cn("search-field flex items-start gap-3 rounded-lg border bg-surface", error ? "border-danger" : "border-line-strong", size === "lg" ? "p-2 pl-4" : "p-1 pl-3")}>
+                <Search className={cn("shrink-0 text-fg-tertiary", size === "lg" ? "mt-3 h-5 w-5" : "mt-2 h-4 w-4")} aria-hidden />
                 <textarea
                     ref={ref}
+                    id={ids.input}
                     rows={1}
                     value={value}
-                    autoFocus={autoFocus}
                     onChange={(e) => setValue(e.target.value)}
                     onKeyDown={onKeyDown}
-                    placeholder="Email, link, domain, IP, phone number — or paste a suspicious message"
-                    aria-label="What do you want to investigate?"
+                    placeholder={SEARCH_LABEL}
+                    aria-describedby={describedBy}
+                    aria-invalid={error ? true : undefined}
                     spellCheck={false}
-                    className={cn(
-                        "min-w-0 flex-1 resize-none bg-transparent text-white placeholder:text-slate-500 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0",
-                        size === "lg" ? "py-3 text-base sm:text-lg" : "py-2 text-sm",
-                    )}
+                    className={cn("min-w-0 flex-1 resize-none bg-transparent text-fg placeholder:text-fg-tertiary", size === "lg" ? "py-2 text-headline" : "py-1 text-body")}
                 />
                 {detected && (
-                    <span className={cn("chip shrink-0 border-brand-400/30 text-brand-300", size === "lg" ? "mt-3.5" : "mt-2")}>
+                    <Badge tone="accent" className={size === "lg" ? "mt-3" : "mt-2"}>
                         {TYPE_LABELS[detected]}
-                    </span>
+                    </Badge>
                 )}
-                <button type="submit" disabled={!value.trim() || busy} className={cn("btn-primary shrink-0", size === "lg" ? "h-12 px-5" : "h-9 px-3")}>
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-                    <span className="hidden sm:inline">Investigate</span>
-                </button>
+                <Button type="submit" variant="primary" size={size === "lg" ? "lg" : "md"} disabled={!value.trim() || busy || disabled}>
+                    {busy && <Spinner tone="on-accent" />}
+                    Look up
+                </Button>
             </div>
+            {error && (
+                <p id={ids.error} className="text-footnote text-danger">
+                    {error}
+                </p>
+            )}
+            {helper && (
+                <p id={ids.helper} className="text-footnote text-fg-tertiary">
+                    {helper}
+                </p>
+            )}
         </form>
     );
 }

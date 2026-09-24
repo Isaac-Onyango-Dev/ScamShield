@@ -7,8 +7,10 @@ test("@F21 sources page lists status, reason, category, links and applicability"
     await page.goto("/sources");
 
     const hibp = app.sourceRow("Have I Been Pwned");
-    await expect(app.rowText(hibp, /Requires HIBP_API_KEY/)).toBeVisible();
-    await expect(app.rowText(hibp, /Breach & leak exposure/)).toBeVisible();
+    // Wording change (plan §4.5): "Requires HIBP_API_KEY" is now shown as "Needs API key: HIBP_API_KEY".
+    await expect(app.rowText(hibp, /HIBP_API_KEY/)).toBeVisible();
+    // Layout change (plan §4.5): the category is now the heading of the source's group.
+    expect(await app.sourceRowCategory("Have I Been Pwned")).toBe("Breach & leak exposure");
     await expect(app.sourceUpstreamLink(hibp, "Have I Been Pwned")).toHaveAttribute("href", "https://haveibeenpwned.com");
     await expect(app.rowText(hibp, "Email")).toBeVisible();
 

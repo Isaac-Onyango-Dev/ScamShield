@@ -1,5 +1,5 @@
 import { test as base, expect, type Page } from "@playwright/test";
-import type { DashboardStats, SourceInfo } from "../../../shared/types";
+import type { DashboardStats, SourceInfo, StreamEvent } from "../../../shared/types";
 import { App } from "./app";
 
 type StreamBody = string | ((url: URL, call: number) => string);
@@ -64,6 +64,54 @@ export class Api {
             return route.fulfill({ status, json });
         });
     }
+}
+
+/**
+ * Scripted EventSource for states a one-shot HTTP mock can't produce (a lookup that is still
+ * streaming). Installed before the app loads; the test pushes events one by one.
+ */
+export async function useScriptedStream(page: Page) {
+    await page.addInitScript(() => {
+        type Listener = ((e: { data: string }) => void) | null;
+        class ScriptedEventSource {
+            onmessage: Listener = null;
+            onerror: (() => void) | null = null;
+            readyState = 1;
+            constructor(readonly url: string) {
+                (window as unknown as { __streams: ScriptedEventSource[] }).__streams.push(this);
+            }
+            close() {
+                this.readyState = 2;
+            }
+        }
+        (window as unknown as { __streams: unknown[] }).__streams = [];
+        (window as unknown as { EventSource: unknown }).EventSource = ScriptedEventSource;
+    });
+    return {
+        emit: (event: StreamEvent) =>
+            page.evaluate((e) => {
+                const streams = (window as unknown as { __streams: { onmessage: ((m: { data: string }) => void) | null }[] }).__streams;
+                streams[streams.length - 1].onmessage?.({ data: JSON.stringify(e) });
+            }, event),
+        urls: () => page.evaluate(() => (window as unknown as { __streams: { url: string }[] }).__streams.map((s) => s.url)),
+    };
+}
+
+/**
+ * Serves the app with a different storage mode in <meta name="scamshield-storage"> (the server
+ * fills it from STORAGE_PERSISTENT). "unrendered" leaves the raw placeholder, as a static host would.
+ */
+export async function setStorageMode(page: Page, mode: "ephemeral" | "persistent" | "unrendered") {
+    await page.route(
+        (url) => !url.pathname.startsWith("/api/"),
+        async (route) => {
+            if (route.request().resourceType() !== "document") return route.fallback();
+            const res = await route.fetch();
+            const value = mode === "unrendered" ? "%STORAGE_MODE%" : mode;
+            const body = (await res.text()).replace(/(<meta name="scamshield-storage" content=")[^"]*(")/, `$1${value}$2`);
+            await route.fulfill({ response: res, body });
+        },
+    );
 }
 
 export const test = base.extend<{ api: Api; app: App }>({

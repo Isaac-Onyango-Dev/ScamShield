@@ -22,7 +22,7 @@ test("@F13 report dialog offers every category, defaults to scam and caps the de
 
 test("@F13 a new report is submitted and the lookup re-runs without the cache", async ({ api, app }) => {
     await api.report(201, { id: 1, duplicate: false, reportCount: 1, message: "Report received. Thank you for protecting others." });
-    await app.categoryOption("phishing").click();
+    await app.selectCategory("phishing");
     expect(await app.selectedCategory()).toBe("phishing");
     await app.reportDescription().fill("SMS lure");
     await app.submitReportButton().click();
@@ -33,10 +33,9 @@ test("@F13 a new report is submitted and the lookup re-runs without the cache", 
     expect(api.streamUrls[1].searchParams.get("fresh")).toBe("1");
 });
 
-// Known bug (audit #31): the re-run after a successful report unmounts and remounts the dialog,
-// so the confirmation is never shown. test.fail() keeps this visible: once P3 fixes it, this
-// test starts passing, Playwright reports it as an unexpected pass, and the marker must go.
-test.fail("@F13 @bug-31 the confirmation stays visible after a successful report", async ({ api, app }) => {
+// Regression test for audit #31: the re-run after a successful report used to remount the
+// dialog, so the confirmation was never shown.
+test("@F13 @bug-31 the confirmation stays visible after a successful report", async ({ api, app }) => {
     await api.report(201, { id: 1, duplicate: false, reportCount: 1, message: "Report received. Thank you for protecting others." });
     await app.submitReportButton().click();
     await expect.poll(() => api.streamUrls.length).toBe(2);

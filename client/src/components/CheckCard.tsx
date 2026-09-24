@@ -1,100 +1,89 @@
 import { useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, CircleDashed, ExternalLink, Info, Loader2, OctagonAlert, Search, XCircle } from "lucide-react";
 import { Link } from "wouter";
-import type { CheckResult, CheckStatus, Item } from "@shared/types";
-import { cn, SEVERITY_DOT, STATUS_STYLES } from "@/lib/ui";
+import type { CheckResult, Item } from "@shared/types";
+import { isRateLimited, statusPresentation } from "@/lib/status";
+import { STORAGE_NOTICE_SHORT, type StorageMode } from "@/lib/deployment";
+import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { CopyButton } from "@/components/ui/CopyButton";
+import { ExternalLink } from "@/components/ui/ExternalLink";
+import { InlineAlert } from "@/components/ui/InlineAlert";
+import { SourceLink } from "@/components/ui/SourceLink";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { SignalList } from "./SignalList";
 
-const ICONS: Record<CheckStatus, typeof Info> = {
-    clean: CheckCircle2,
-    found: Search,
-    info: Info,
-    warning: AlertTriangle,
-    danger: OctagonAlert,
-    error: XCircle,
-    skipped: CircleDashed,
-};
+const PREVIEW = 6;
 
-function ItemLink({ item }: { item: Item }) {
-    const internal = item.href?.startsWith("/");
-    const body = (
+function ItemBody({ item }: { item: Item }) {
+    return (
         <div className="flex min-w-0 items-start gap-3">
-            {item.image && <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-9 w-9 shrink-0 rounded-lg object-cover" />}
+            {item.image && <img src={item.image} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-8 w-8 shrink-0 rounded-sm border border-line object-cover" />}
             <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className="truncate font-medium text-slate-100">{item.title}</span>
-                    {item.date && <span className="text-xs tabular-nums text-slate-500">{item.date}</span>}
-                    {item.href && !internal && <ExternalLink className="h-3 w-3 shrink-0 text-slate-500" />}
+                <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className="truncate font-medium text-fg">{item.title}</span>
+                    {item.date && <span className="tabular text-caption text-fg-tertiary">{item.date}</span>}
                 </div>
-                {item.subtitle && <p className="mt-0.5 break-words text-xs text-slate-400">{item.subtitle}</p>}
+                {item.subtitle && <p className="break-words text-caption text-fg-secondary">{item.subtitle}</p>}
                 {item.tags && item.tags.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1">
+                    <div className="mt-1 flex flex-wrap gap-1">
                         {item.tags.map((t) => (
-                            <span key={t} className="chip px-1.5 py-0 text-[10px]">
-                                {t}
-                            </span>
+                            <Badge key={t}>{t}</Badge>
                         ))}
                     </div>
                 )}
             </div>
         </div>
     );
-    const cls = "block rounded-xl border border-white/[0.05] bg-white/[0.02] p-3 transition hover:border-white/15 hover:bg-white/[0.04]";
-    if (!item.href) return <div className={cls}>{body}</div>;
-    if (internal) return <Link href={item.href} className={cls}>{body}</Link>;
-    return (
-        <a href={item.href} target="_blank" rel="noopener noreferrer nofollow" className={cls}>
-            {body}
-        </a>
-    );
 }
 
-export function CheckCard({ result }: { result: CheckResult }) {
-    const [expanded, setExpanded] = useState(false);
-    const Icon = ICONS[result.status];
-    const style = STATUS_STYLES[result.status];
-    const items = result.items ?? [];
-    const shown = expanded ? items : items.slice(0, 6);
-    const quiet = result.status === "skipped" || result.status === "error";
+function ItemRow({ item }: { item: Item }) {
+    const cls = "block rounded-md px-3 py-2 text-footnote transition-colors duration-fast hover:bg-surface-2";
+    if (!item.href) return <div className={cls}><ItemBody item={item} /></div>;
+    if (item.href.startsWith("/")) return <Link href={item.href} className={cls}><ItemBody item={item} /></Link>;
+    return <ExternalLink href={item.href} className={cls}><ItemBody item={item} /></ExternalLink>;
+}
 
+export function CheckCard({ result, storage }: { result: CheckResult; storage: StorageMode }) {
+    const [expanded, setExpanded] = useState(false);
+    const items = result.items ?? [];
+    const shown = expanded ? items : items.slice(0, PREVIEW);
+    const titleId = `source-${result.id}-title`;
     return (
-        <article className={cn("panel animate-fade-up p-5", quiet && "opacity-70")}>
+        <Card as="article" id={`source-${result.id}`} data-testid="source-card" aria-labelledby={titleId} className="flex scroll-mt-20 animate-fade-in flex-col gap-4 p-4 sm:p-5">
             <header className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-start gap-3">
-                    <Icon className={cn("mt-0.5 h-5 w-5 shrink-0", style.cls.split(" ")[0])} />
-                    <div className="min-w-0">
-                        <h3 className="font-semibold text-white">{result.name}</h3>
-                        <p className="mt-0.5 text-sm text-slate-400">{result.summary}</p>
-                    </div>
+                <div className="min-w-0">
+                    <h3 id={titleId} className="text-headline font-semibold text-fg">
+                        {result.name}
+                    </h3>
+                    <p className="text-footnote text-fg-secondary">{result.summary}</p>
                 </div>
-                <span className={cn("shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold", style.cls)}>{style.label}</span>
+                <StatusBadge presentation={statusPresentation(result)} value={result.status} />
             </header>
 
-            {result.error && <p className="mt-3 rounded-lg bg-white/[0.03] px-3 py-2 font-mono text-xs text-slate-400">{result.error}</p>}
-
-            {result.signals.length > 0 && (
-                <ul className="mt-4 space-y-1.5">
-                    {result.signals.map((s) => (
-                        <li key={s.id + s.label} className="flex items-start gap-2 text-sm">
-                            <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", s.kind === "trust" ? "bg-emerald-400" : SEVERITY_DOT[s.severity])} />
-                            <span className={s.kind === "trust" ? "text-emerald-200/90" : "text-slate-200"}>{s.label}</span>
-                        </li>
-                    ))}
-                </ul>
+            {result.error && (
+                <InlineAlert title={isRateLimited(result) ? "Rate limited by source. Try Refresh in a few minutes." : "Unavailable"}>{result.error}</InlineAlert>
             )}
 
+            {result.signals.length > 0 && <SignalList signals={result.signals} />}
+
             {result.facts.length > 0 && (
-                <dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
                     {result.facts.map((f, i) => (
                         <div key={f.label + i} className="min-w-0">
-                            <dt className="text-[11px] uppercase tracking-wide text-slate-500">{f.label}</dt>
-                            <dd className={cn("break-words text-slate-200", f.mono && "font-mono text-[13px]")}>
-                                {f.href ? (
-                                    <a href={f.href} target="_blank" rel="noopener noreferrer nofollow" className="text-brand-300 hover:underline">
-                                        {f.value}
-                                    </a>
-                                ) : (
-                                    f.value
-                                )}
+                            <dt className="text-caption text-fg-tertiary">{f.label}</dt>
+                            <dd className="flex items-start gap-1 text-footnote text-fg">
+                                <span className={f.mono ? "min-w-0 break-all font-mono" : "min-w-0 break-words"}>
+                                    {f.href ? (
+                                        <ExternalLink href={f.href} className="text-accent hover:underline">
+                                            {f.value}
+                                        </ExternalLink>
+                                    ) : (
+                                        f.value
+                                    )}
+                                </span>
+                                <CopyButton value={f.value} label={`Copy ${f.label}`} />
                             </dd>
                         </div>
                     ))}
@@ -102,50 +91,40 @@ export function CheckCard({ result }: { result: CheckResult }) {
             )}
 
             {items.length > 0 && (
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <ul data-testid="card-items" className="-mx-3 flex flex-col">
                     {shown.map((item, i) => (
-                        <ItemLink key={item.title + i} item={item} />
+                        <li key={item.title + i}>
+                            <ItemRow item={item} />
+                        </li>
                     ))}
-                </div>
+                </ul>
             )}
-            {items.length > 6 && (
-                <button onClick={() => setExpanded(!expanded)} className="mt-3 inline-flex items-center gap-1 text-sm text-brand-300 hover:text-brand-200">
-                    {expanded ? "Show less" : `Show all ${items.length}`}
-                    <ChevronDown className={cn("h-4 w-4 transition", expanded && "rotate-180")} />
-                </button>
+            {items.length > PREVIEW && (
+                <Button variant="plain" size="sm" className="self-start" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+                    {expanded ? "Show fewer" : `Show all ${items.length}`}
+                </Button>
             )}
 
-            <footer className="mt-4 flex items-center justify-between text-[11px] text-slate-500">
-                {result.source ? (
-                    result.source.url.startsWith("/") ? (
-                        <span>Source: {result.source.name}</span>
-                    ) : (
-                        <a href={result.source.url} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300">
-                            Source: {result.source.name}
-                        </a>
-                    )
-                ) : (
-                    <span>ScamShield analysis</span>
-                )}
-                {result.durationMs > 0 && <span className="tabular-nums">{result.durationMs} ms</span>}
+            <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
+                <SourceLink source={result.source} />
+                {result.durationMs > 0 && <span className="tabular text-caption text-fg-tertiary">Answered in {result.durationMs} ms</span>}
+                {result.id === "community" && storage === "ephemeral" && <p className="w-full text-caption text-fg-tertiary">{STORAGE_NOTICE_SHORT}</p>}
             </footer>
-        </article>
+        </Card>
     );
 }
 
-export function PendingCard({ name }: { name: string }) {
+/** Placeholder for a source that hasn't answered yet: static, no spinner or shimmer. */
+export function PendingSource({ id, name }: { id: string; name: string }) {
     return (
-        <div className="panel relative overflow-hidden p-5">
-            <div className="flex items-center gap-3">
-                <Loader2 className="h-5 w-5 animate-spin text-brand-400" />
-                <div>
-                    <p className="font-semibold text-slate-300">{name}</p>
-                    <p className="text-sm text-slate-500">Querying source…</p>
+        <Card as="article" id={`source-${id}`} data-testid="pending-source" aria-busy className="flex flex-col gap-3 p-4 sm:p-5">
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-col gap-1">
+                    <h3 className="text-headline font-semibold text-fg-secondary">{name}</h3>
+                    <p className="text-footnote text-fg-tertiary">Waiting for response</p>
                 </div>
+                <Skeleton className="h-5 w-16" />
             </div>
-            <div className="absolute inset-x-0 bottom-0 h-px overflow-hidden">
-                <div className="h-px w-1/3 animate-scan bg-gradient-to-r from-transparent via-brand-400 to-transparent" />
-            </div>
-        </div>
+        </Card>
     );
 }

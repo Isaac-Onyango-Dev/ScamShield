@@ -1,97 +1,131 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Flag, Loader2, X } from "lucide-react";
+import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import { X } from "lucide-react";
 import { REPORT_CATEGORIES, type ReportCategory, type Target } from "@shared/types";
-import { submitReport } from "@/lib/api";
+import { ApiError, submitReport } from "@/lib/api";
+import { cn } from "@/lib/cn";
+import { STORAGE_NOTICE, type StorageMode } from "@/lib/deployment";
+import { Button } from "@/components/ui/Button";
+import { InlineAlert } from "@/components/ui/InlineAlert";
+import { Spinner } from "@/components/ui/Spinner";
 
-export function ReportDialog({ target, open, onClose, onReported }: { target: Target; open: boolean; onClose: () => void; onReported: () => void }) {
+const MAX = 1000;
+
+type Outcome = { tone: "success" | "info" | "warning" | "danger"; text: string; final: boolean };
+
+/**
+ * Community report form in a native modal <dialog>: focus is trapped while open and returns
+ * to the "Report…" button on close. Categories are real radios (fieldset + legend).
+ */
+export function ReportDialog({
+    target,
+    open,
+    onClose,
+    onReported,
+    storage,
+}: {
+    target: Target;
+    open: boolean;
+    onClose: () => void;
+    onReported: () => void;
+    storage: StorageMode;
+}) {
     const ref = useRef<HTMLDialogElement>(null);
+    const ids = { title: useId(), description: useId(), helper: useId() };
     const [category, setCategory] = useState<ReportCategory>("scam");
     const [description, setDescription] = useState("");
     const [busy, setBusy] = useState(false);
-    const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+    const [outcome, setOutcome] = useState<Outcome | null>(null);
 
     useEffect(() => {
         const d = ref.current;
         if (!d) return;
         if (open && !d.open) {
-            setMessage(null);
+            setOutcome(null);
             d.showModal();
+            d.querySelector<HTMLInputElement>('input[name="report-category"]:checked')?.focus();
         } else if (!open && d.open) d.close();
     }, [open]);
 
     async function submit(e: FormEvent) {
         e.preventDefault();
         setBusy(true);
-        setMessage(null);
+        setOutcome(null);
         try {
             const res = await submitReport({ query: target.input, type: target.type, category, description: description.trim() || undefined });
-            setMessage({ ok: true, text: res.message });
+            setOutcome({ tone: res.duplicate ? "info" : "success", text: res.message, final: true });
             if (!res.duplicate) onReported();
         } catch (err) {
-            setMessage({ ok: false, text: (err as Error).message });
+            if (err instanceof ApiError && err.status === 429) setOutcome({ tone: "warning", text: "Too many reports from your network. Try again later.", final: false });
+            else setOutcome({ tone: "danger", text: (err as Error).message, final: false });
         } finally {
             setBusy(false);
         }
     }
 
     return (
-        <dialog
-            ref={ref}
-            onClose={onClose}
-            className="w-[min(92vw,480px)] rounded-2xl border border-white/10 bg-ink-900 p-0 text-slate-200 backdrop:bg-black/70 backdrop:backdrop-blur-sm"
-        >
-            <form onSubmit={submit} className="p-6">
-                <div className="flex items-start justify-between">
-                    <div>
-                        <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-                            <Flag className="h-5 w-5 text-rose-400" /> Report as malicious
+        <dialog ref={ref} aria-labelledby={ids.title} onClose={onClose} className="w-full max-w-lg rounded-lg border border-line bg-surface p-0 text-fg shadow-overlay">
+            <form onSubmit={submit} className="flex flex-col gap-5 p-6">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                        <h2 id={ids.title} className="text-title-3 font-semibold">
+                            Report this lookup
                         </h2>
-                        <p className="mt-1 break-all font-mono text-xs text-slate-400">{target.normalized.slice(0, 160)}</p>
+                        <p className="mt-1 break-all font-mono text-caption text-fg-secondary">{target.normalized.slice(0, 160)}</p>
                     </div>
-                    <button type="button" onClick={onClose} className="rounded-lg p-1 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Close">
-                        <X className="h-5 w-5" />
-                    </button>
+                    <Button variant="plain" size="sm" onClick={onClose} aria-label="Close" className="h-8 w-8 rounded-md text-fg-secondary hover:bg-surface-2 hover:text-fg hover:no-underline">
+                        <X className="h-4 w-4" aria-hidden />
+                    </Button>
                 </div>
 
-                <label className="mt-5 block text-sm font-medium text-slate-300">Category</label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                    {REPORT_CATEGORIES.map((c) => (
-                        <button
-                            type="button"
-                            key={c}
-                            onClick={() => setCategory(c)}
-                            className={`rounded-full border px-3 py-1 text-sm capitalize transition ${
-                                category === c ? "border-rose-400/50 bg-rose-500/15 text-rose-200" : "border-white/10 text-slate-400 hover:text-white"
-                            }`}
-                        >
-                            {c}
-                        </button>
-                    ))}
+                <fieldset className="flex flex-col gap-2">
+                    <legend className="mb-2 text-footnote font-semibold">Category</legend>
+                    <div className="flex flex-wrap gap-2">
+                        {REPORT_CATEGORIES.map((c) => (
+                            <label
+                                key={c}
+                                className={cn(
+                                    "cursor-pointer rounded-md border px-3 py-1 text-footnote capitalize transition-colors duration-fast has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus",
+                                    category === c ? "border-accent bg-accent-tint font-semibold text-accent" : "border-line-strong text-fg-secondary hover:text-fg",
+                                )}
+                            >
+                                <input type="radio" name="report-category" value={c} checked={category === c} onChange={() => setCategory(c)} className="sr-only" />
+                                {c}
+                            </label>
+                        ))}
+                    </div>
+                </fieldset>
+
+                <div className="flex flex-col gap-2">
+                    <label htmlFor={ids.description} className="text-footnote font-semibold">
+                        What happened? <span className="font-normal text-fg-tertiary">(optional)</span>
+                    </label>
+                    <textarea
+                        id={ids.description}
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        maxLength={MAX}
+                        rows={4}
+                        aria-describedby={ids.helper}
+                        className="w-full rounded-md border border-line-strong bg-surface p-3 text-footnote text-fg placeholder:text-fg-tertiary"
+                    />
+                    <div className="flex justify-between gap-4 text-caption text-fg-tertiary">
+                        <p id={ids.helper}>Public. Don't include your own personal details.</p>
+                        <p className="tabular" aria-hidden>
+                            {description.length} / {MAX}
+                        </p>
+                    </div>
                 </div>
 
-                <label htmlFor="report-desc" className="mt-5 block text-sm font-medium text-slate-300">
-                    What happened? <span className="text-slate-500">(optional, public)</span>
-                </label>
-                <textarea
-                    id="report-desc"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    maxLength={1000}
-                    rows={4}
-                    placeholder="e.g. Called claiming to be my bank and asked for the SMS code. Don't include your own personal details."
-                    className="mt-2 w-full rounded-xl border border-white/10 bg-ink-950 p-3 text-sm text-white placeholder:text-slate-600 focus:border-brand-400/50 focus:outline-none"
-                />
+                {storage === "ephemeral" && <InlineAlert tone="info">{STORAGE_NOTICE}</InlineAlert>}
+                {outcome && <InlineAlert tone={outcome.tone}>{outcome.text}</InlineAlert>}
 
-                {message && <p className={`mt-3 text-sm ${message.ok ? "text-emerald-300" : "text-rose-300"}`}>{message.text}</p>}
-
-                <div className="mt-6 flex justify-end gap-2">
-                    <button type="button" onClick={onClose} className="btn-ghost">
-                        {message?.ok ? "Done" : "Cancel"}
-                    </button>
-                    {!message?.ok && (
-                        <button type="submit" disabled={busy} className="btn bg-rose-500 text-white hover:bg-rose-400">
-                            {busy && <Loader2 className="h-4 w-4 animate-spin" />} Submit report
-                        </button>
+                <div className="flex justify-end gap-2">
+                    <Button onClick={onClose}>{outcome?.final ? "Done" : "Cancel"}</Button>
+                    {!outcome?.final && (
+                        <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+                            {busy && <Spinner tone="on-accent" />}
+                            Submit report
+                        </Button>
                     )}
                 </div>
             </form>

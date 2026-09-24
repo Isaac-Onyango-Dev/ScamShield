@@ -1,136 +1,97 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { AtSign, Fingerprint, Globe, Link2, MessageSquareWarning, Phone, Server } from "lucide-react";
-import { EXAMPLES, SearchBox } from "@/components/SearchBox";
+import type { DashboardStats } from "@shared/types";
 import { fetchStats } from "@/lib/api";
+import { storageMode, type StorageMode } from "@/lib/deployment";
+import { EXAMPLES } from "@/lib/examples";
+import { formatCount } from "@/lib/format";
+import { SearchBox } from "@/components/SearchBox";
+import { Card } from "@/components/ui/Card";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 const CAPABILITIES = [
-    {
-        icon: AtSign,
-        title: "Email addresses",
-        points: ["Breach history (XposedOrNot, HIBP)", "Infostealer malware logs (Hudson Rock)", "Gravatar, GitHub & PGP footprint", "Disposable / brand-impersonating mailboxes", "MX, SPF & DMARC posture"],
-    },
-    {
-        icon: Link2,
-        title: "Links & URLs",
-        points: ["Shorteners, raw-IP hosts, '@' tricks", "Dangerous downloads & phishing-kit paths", "Google Safe Browsing & URLhaus", "Everything in the domain checks"],
-    },
-    {
-        icon: Globe,
-        title: "Domains",
-        points: ["Registration age via RDAP", "Typosquats & homograph (IDN) attacks", "Spamhaus DBL, SURBL, URIBL", "TLS certificate inspection"],
-    },
-    {
-        icon: Server,
-        title: "IP addresses",
-        points: ["Network owner & abuse contact (RDAP)", "Reverse DNS", "Spamhaus ZEN, SpamCop, DroneBL", "AbuseIPDB confidence score"],
-    },
-    {
-        icon: Phone,
-        title: "Phone numbers",
-        points: ["Validity, country & carrier line type", "VoIP, premium-rate & Wangiri ranges", "Community reports", "WhatsApp, Truecaller & Tellows pivots"],
-    },
-    {
-        icon: MessageSquareWarning,
-        title: "Messages (SMS / email / DM)",
-        points: ["17 social-engineering tactics detected", "Links, emails & numbers auto-extracted", "Each indicator one click from a full lookup", "Explainable, not a black box"],
-    },
+    { type: "Email", checks: ["breach history (XposedOrNot, HIBP)", "infostealer logs (Hudson Rock)", "Gravatar, GitHub and PGP footprint", "disposable and brand-impersonating mailboxes", "MX, SPF and DMARC"] },
+    { type: "Link", checks: ["shorteners, raw-IP hosts and '@' tricks", "risky downloads and phishing-kit paths", "Google Safe Browsing and URLhaus", "every domain check"] },
+    { type: "Domain", checks: ["registration age (RDAP)", "typosquats and homographs (IDN)", "Spamhaus DBL, SURBL, URIBL", "TLS certificate"] },
+    { type: "IP address", checks: ["network owner and abuse contact (RDAP)", "reverse DNS", "Spamhaus ZEN, SpamCop, DroneBL", "AbuseIPDB"] },
+    { type: "Phone", checks: ["validity, country and line type", "VoIP, premium-rate and Wangiri ranges", "community reports", "Truecaller and Tellows pivots"] },
+    { type: "Message", checks: ["17 social-engineering tactics", "links, emails and numbers extracted for follow-up lookups"] },
 ];
 
-function Stat({ label, value }: { label: string; value?: number }) {
+/**
+ * Public counters as one quiet line (decisions D4, D9). Zero values are never shown; the whole
+ * row disappears when everything is zero. On ephemeral storage the restart-scoped counters are
+ * qualified with "since last restart"; known indicators are re-seeded on boot, so they aren't.
+ */
+export function statsLine(stats: DashboardStats, storage: StorageMode): string | null {
+    const scoped = [
+        stats.reportsLast24h > 0 && `${formatCount(stats.reportsLast24h)} reports in the last 24 h`,
+        stats.totalLookups > 0 && `${formatCount(stats.totalLookups)} lookups run`,
+        stats.totalReports > 0 && `${formatCount(stats.totalReports)} community reports`,
+    ].filter(Boolean) as string[];
+    if (scoped.length && storage === "ephemeral") scoped[scoped.length - 1] += " since last restart";
+    const parts = [...scoped, ...(stats.knownScams > 0 ? [`${formatCount(stats.knownScams)} known scam indicators`] : [])];
+    return parts.length ? parts.join(" · ") : null;
+}
+
+function Stats() {
+    const storage = useMemo(storageMode, []);
+    const { data, isLoading, isError } = useQuery({ queryKey: ["stats"], queryFn: fetchStats, refetchInterval: 60_000 });
+    if (isLoading) return <Skeleton className="mx-auto h-4 w-1/2" />;
+    if (isError || !data) return null; // non-critical: hide rather than show a broken row
+    const line = statsLine(data, storage);
+    if (!line) return null;
     return (
-        <div className="text-center">
-            <div className="text-2xl font-bold tabular-nums text-white sm:text-3xl">{value === undefined ? "—" : value.toLocaleString()}</div>
-            <div className="mt-1 text-xs uppercase tracking-wider text-slate-500">{label}</div>
-        </div>
+        <p data-testid="stats-row" className="tabular text-center text-caption text-fg-tertiary">
+            {line}
+        </p>
     );
 }
 
 export function HomePage() {
-    const { data: stats } = useQuery({ queryKey: ["stats"], queryFn: fetchStats, refetchInterval: 60_000 });
-
     return (
-        <>
-            <section className="relative overflow-hidden">
-                <div className="grid-bg pointer-events-none absolute inset-0" />
-                <div className="pointer-events-none absolute left-1/2 top-[-200px] h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-brand-500/10 blur-3xl" />
-                <div className="relative mx-auto max-w-3xl px-4 pb-16 pt-16 text-center sm:px-6 sm:pt-24">
-                    <span className="chip border-brand-400/25 text-brand-300">
-                        <Fingerprint className="h-3.5 w-3.5" /> Free · open source · no sign-up
-                    </span>
-                    <h1 className="mt-6 text-4xl font-bold tracking-tight text-white sm:text-6xl">
-                        Investigate before
-                        <br className="hidden sm:block" /> you <span className="text-brand-400">trust</span>.
-                    </h1>
-                    <p className="mx-auto mt-5 max-w-xl text-base text-slate-400 sm:text-lg">
-                        Check any email, link, domain, IP address, phone number or suspicious message against live breach data,
-                        malware logs, blocklists, DNS and community reports — in seconds.
-                    </p>
-                    <div className="mt-10">
-                        <SearchBox autoFocus />
-                    </div>
-                    <div className="mt-4 flex flex-wrap items-center justify-center gap-2 text-sm">
-                        <span className="text-slate-500">Try:</span>
-                        {EXAMPLES.map((ex) => (
-                            <Link key={ex.label} href={`/search?q=${encodeURIComponent(ex.q)}`} className="chip transition hover:border-brand-400/40 hover:text-white">
-                                {ex.label}
-                            </Link>
+        <div className="mx-auto flex max-w-3xl flex-col gap-12 px-4 py-12 sm:px-6 sm:py-20">
+            <section className="flex flex-col gap-6">
+                <div className="flex flex-col gap-3 text-center">
+                    <h1 className="text-title-2 font-bold tracking-tight text-fg sm:text-title-1">Check an email, link, domain, IP, phone number or message.</h1>
+                    <p className="text-body text-fg-secondary">Results come from public sources and appear as each one answers.</p>
+                </div>
+                <SearchBox helper="Paste a whole message to extract its links and numbers. Defanged input like hxxp://evil[.]com works." />
+                <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-footnote">
+                    <span className="text-fg-tertiary">Examples</span>
+                    {EXAMPLES.map((ex) => (
+                        <Link key={ex.label} href={`/search?q=${encodeURIComponent(ex.q)}`} className="rounded-sm text-accent hover:underline">
+                            {ex.label}
+                        </Link>
+                    ))}
+                </div>
+                <Stats />
+            </section>
+
+            <Card as="section" aria-labelledby="capabilities-title" className="flex flex-col gap-4 p-5 sm:p-6">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h2 id="capabilities-title" className="text-headline font-semibold text-fg">
+                        What each lookup checks
+                    </h2>
+                    <Link href="/sources" className="text-footnote text-accent hover:underline">
+                        See all sources
+                    </Link>
+                </div>
+                <table data-testid="capabilities" className="w-full border-collapse text-left text-footnote">
+                    <caption className="sr-only">Checks run for each type of input</caption>
+                    <tbody>
+                        {CAPABILITIES.map((c) => (
+                            <tr key={c.type} className="border-t border-line align-top first:border-t-0">
+                                <th scope="row" className="w-1/4 py-3 pr-4 font-semibold text-fg">
+                                    {c.type}
+                                </th>
+                                <td className="py-3 text-fg-secondary">{c.checks.join(", ")}</td>
+                            </tr>
                         ))}
-                    </div>
-                </div>
-            </section>
-
-            <section className="border-y border-white/[0.06] bg-ink-900/40">
-                <div className="mx-auto grid max-w-5xl grid-cols-2 gap-6 px-4 py-8 sm:grid-cols-4">
-                    <Stat label="Lookups run" value={stats?.totalLookups} />
-                    <Stat label="Community reports" value={stats?.totalReports} />
-                    <Stat label="Reports (24h)" value={stats?.reportsLast24h} />
-                    <Stat label="Known scam indicators" value={stats?.knownScams} />
-                </div>
-            </section>
-
-            <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
-                <div className="mx-auto max-w-2xl text-center">
-                    <h2 className="text-3xl font-bold tracking-tight text-white">One search. 20+ intelligence sources.</h2>
-                    <p className="mt-3 text-slate-400">
-                        Every source runs in parallel and streams in live. Each finding is a weighted, explainable signal — you see
-                        exactly why a score is what it is.
-                    </p>
-                </div>
-                <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {CAPABILITIES.map(({ icon: Icon, title, points }) => (
-                        <div key={title} className="panel p-6">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-300">
-                                <Icon className="h-5 w-5" />
-                            </div>
-                            <h3 className="mt-4 font-semibold text-white">{title}</h3>
-                            <ul className="mt-3 space-y-1.5 text-sm text-slate-400">
-                                {points.map((p) => (
-                                    <li key={p} className="flex gap-2">
-                                        <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-brand-400" />
-                                        {p}
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            <section className="mx-auto max-w-5xl px-4 pb-24 sm:px-6">
-                <div className="panel grid gap-8 p-8 sm:grid-cols-3">
-                    {[
-                        ["1. Paste anything", "The input type is detected automatically — even defanged indicators like hxxp://evil[.]com."],
-                        ["2. Sources answer live", "Breach, reputation, DNS and registry sources are queried concurrently with strict timeouts."],
-                        ["3. Get an explainable verdict", "Red flags and trust signals combine into a 0–100 score, with plain-language advice."],
-                    ].map(([t, d]) => (
-                        <div key={t}>
-                            <h3 className="font-semibold text-white">{t}</h3>
-                            <p className="mt-2 text-sm text-slate-400">{d}</p>
-                        </div>
-                    ))}
-                </div>
-            </section>
-        </>
+                    </tbody>
+                </table>
+            </Card>
+        </div>
     );
 }

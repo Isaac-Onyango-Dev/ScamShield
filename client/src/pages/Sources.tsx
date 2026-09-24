@@ -1,57 +1,123 @@
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, CircleDashed } from "lucide-react";
 import { TYPE_LABELS } from "@shared/detect";
+import type { SourceInfo } from "@shared/types";
 import { fetchSources } from "@/lib/api";
-import { CATEGORY_LABELS } from "@/lib/ui";
+import { CATEGORY_LABELS, CATEGORY_ORDER } from "@/lib/categories";
+import { STATUSES } from "@/lib/status";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { InlineAlert } from "@/components/ui/InlineAlert";
+import { SourceLink } from "@/components/ui/SourceLink";
+import { Skeleton } from "@/components/ui/Skeleton";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+
+/** "Requires HIBP_API_KEY" → "Needs API key: HIBP_API_KEY", keeping any extra guidance. */
+function disabledText(reason?: string): { title: string; detail?: string } {
+    const m = /Requires ([A-Z0-9_]+)\s*(.*)$/.exec(reason ?? "");
+    if (m) return { title: `Needs API key: ${m[1]}`, detail: m[2]?.replace(/^\(|\)$/g, "") || undefined };
+    return { title: reason ?? "Not configured" };
+}
+
+function SourceRow({ s }: { s: SourceInfo }) {
+    const off = disabledText(s.reason);
+    return (
+        <tr data-testid="source-row" className="border-t border-line align-top">
+            <th scope="row" className="py-3 pr-4 text-left font-normal">
+                <p className="font-semibold text-fg">{s.name}</p>
+                <SourceLink source={s.source} />
+            </th>
+            <td className="py-3 pr-4">
+                <div className="flex flex-wrap gap-1">
+                    {s.appliesTo.map((t) => (
+                        <Badge key={t}>{TYPE_LABELS[t]}</Badge>
+                    ))}
+                </div>
+            </td>
+            <td className="py-3">
+                {s.enabled ? (
+                    <StatusBadge presentation={{ ...STATUSES.clean, label: "Active" }} value="active" />
+                ) : (
+                    <div className="flex flex-col items-start gap-1">
+                        <StatusBadge presentation={{ ...STATUSES.skipped, label: off.title }} value="needs-key" />
+                        {off.detail && <p className="text-caption text-fg-tertiary">{off.detail}</p>}
+                    </div>
+                )}
+            </td>
+        </tr>
+    );
+}
 
 export function SourcesPage() {
-    const { data, isLoading, error } = useQuery({ queryKey: ["sources"], queryFn: fetchSources });
+    const { data, isLoading, isError, error, refetch, isFetching } = useQuery({ queryKey: ["sources"], queryFn: fetchSources });
+    const groups = CATEGORY_ORDER.map((category) => ({ category, sources: data?.sources.filter((s) => s.category === category) ?? [] })).filter((g) => g.sources.length);
+
     return (
-        <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
-            <h1 className="text-3xl font-bold tracking-tight text-white">Intelligence sources</h1>
-            <p className="mt-3 max-w-2xl text-slate-400">
-                Every lookup is answered by these modules. Optional sources activate when the operator configures an API key.
-                ScamShield only reads public data — it never sends email, calls numbers, or logs into accounts.
-            </p>
-            {data && (
-                <p className="mt-2 text-sm text-slate-500">
-                    AI-written summaries: {data.aiSummaries ? "enabled" : "disabled (rule-based summaries in use)"}
+        <div className="mx-auto flex max-w-4xl flex-col gap-8 px-4 py-12 sm:px-6">
+            <div className="flex flex-col gap-3">
+                <h1 className="text-title-2 font-bold tracking-tight text-fg">Sources</h1>
+                <p className="text-body text-fg-secondary">
+                    Every lookup is answered by these modules. Optional sources turn on when the operator sets an API key. ScamShield only reads public data: it never sends email, calls numbers or logs into accounts.
                 </p>
-            )}
-            {isLoading && <p className="mt-8 text-slate-500">Loading…</p>}
-            {error && <p className="mt-8 text-rose-300">{(error as Error).message}</p>}
-            <div className="panel mt-8 divide-y divide-white/[0.06] overflow-hidden">
-                {data?.sources.map((s) => (
-                    <div key={s.id} className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex items-start gap-3">
-                            {s.enabled ? <CheckCircle2 className="mt-0.5 h-5 w-5 text-emerald-400" /> : <CircleDashed className="mt-0.5 h-5 w-5 text-slate-500" />}
-                            <div>
-                                <p className="font-medium text-white">{s.name}</p>
-                                <p className="text-xs text-slate-500">
-                                    {CATEGORY_LABELS[s.category]?.title} ·{" "}
-                                    {s.source ? (
-                                        s.source.url.startsWith("/") ? s.source.name : (
-                                            <a href={s.source.url} target="_blank" rel="noreferrer" className="hover:text-slate-300">
-                                                {s.source.name}
-                                            </a>
-                                        )
-                                    ) : (
-                                        "built-in analysis"
-                                    )}
-                                    {!s.enabled && s.reason && <span className="text-amber-300/80"> · {s.reason}</span>}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1 pl-8 sm:pl-0">
-                            {s.appliesTo.map((t) => (
-                                <span key={t} className="chip">
-                                    {TYPE_LABELS[t]}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
-                ))}
+                {data && (
+                    <InlineAlert tone="info">
+                        {data.aiSummaries ? "Summaries are written by AI. Scores are always rule-based." : "Summaries are generated from rules. Scores are always rule-based."}
+                    </InlineAlert>
+                )}
             </div>
+
+            {isLoading && (
+                <div className="flex flex-col gap-4" aria-label="Loading sources">
+                    {Array.from({ length: 6 }, (_, i) => (
+                        <Skeleton key={i} className="h-8 w-full" />
+                    ))}
+                </div>
+            )}
+
+            {isError && (
+                <InlineAlert
+                    tone="danger"
+                    title="Couldn't load the source list."
+                    action={
+                        <Button size="sm" onClick={() => refetch()} disabled={isFetching}>
+                            Retry
+                        </Button>
+                    }
+                >
+                    {(error as Error).message}
+                </InlineAlert>
+            )}
+
+            {data && data.sources.length === 0 && <EmptyState title="No sources configured." />}
+
+            {groups.map((g) => (
+                <section key={g.category} aria-labelledby={`sources-${g.category}`} className="flex flex-col gap-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                        <h2 id={`sources-${g.category}`} className="text-title-3 font-semibold text-fg">
+                            {CATEGORY_LABELS[g.category].title}
+                        </h2>
+                        <p className="text-caption text-fg-tertiary">
+                            {g.sources.length} {g.sources.length === 1 ? "source" : "sources"}
+                        </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse text-footnote">
+                            <thead className="text-left text-caption text-fg-tertiary">
+                                <tr>
+                                    <th scope="col" className="pb-2 pr-4 font-medium">Source</th>
+                                    <th scope="col" className="pb-2 pr-4 font-medium">Applies to</th>
+                                    <th scope="col" className="pb-2 font-medium">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {g.sources.map((s) => (
+                                    <SourceRow key={s.id} s={s} />
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            ))}
         </div>
     );
 }

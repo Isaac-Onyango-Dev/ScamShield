@@ -38,14 +38,15 @@ test("@F08 skipped sources are listed as not run, with their reason", async ({ p
     await expect(app.sourceCard("Have I Been Pwned")).toHaveCount(0);
 });
 
-test("@F09 target header shows type, truncated message, duration or cache age", async ({ page, api, app }) => {
+// Behaviour change (plan §4.3): long messages are clamped to 3 lines with "Show full message"
+// instead of being cut at 140 characters, so the whole message is available.
+test("@F09 target header shows type, the message, duration or cache age", async ({ page, api, app }) => {
     await api.stream((_url, call) =>
         fullStream(call === 1 ? messageReport() : messageReport({ cached: true, generatedAt: new Date(Date.now() - 4 * 60_000).toISOString() })),
     );
     await page.goto(SEARCH);
     await expect(app.targetType("Message")).toBeVisible();
-    await expect(app.targetHeading()).toHaveText(/…"$/);
-    expect(((await app.targetHeading().textContent()) ?? "").length).toBeLessThan(MESSAGE.length);
+    await expect(app.targetHeading()).toContainText(MESSAGE);
     await expect(app.durationBadge()).toHaveText("3.2 s");
 
     await page.reload();
@@ -167,7 +168,7 @@ test("@F18 source cards show status, evidence, items, attribution and timing", a
 
     const breaches = app.sourceCard("Breach exposure");
     await expect(app.cardStatus(breaches, "Unavailable")).toBeVisible();
-    await expect(app.cardText(breaches, "Rate limited by upstream source — try again shortly")).toBeVisible();
+    await expect(app.cardText(breaches, "Timed out after 8000 ms")).toBeVisible();
 });
 
 test("@F19 in-app pivots open a new lookup without a full reload", async ({ page, api, app }) => {
