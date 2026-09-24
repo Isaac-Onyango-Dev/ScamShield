@@ -124,7 +124,7 @@ test("@export-csv downloads a spreadsheet-safe CSV", async ({ page, api, app }) 
 
     const bytes = await readFile(await download.path());
     expect([...bytes.subarray(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
-    const text = bytes.toString("utf8").replace(/^﻿/, "");
+    const text = bytes.toString("utf8").replace(/^\uFEFF/, "");
     const lines = text.split("\r\n");
     expect(lines[0]).toBe(
         ["generated_at", "target_type", "target", "source_id", "source_name", "category", "status", "summary", "signal_kind", "signal_severity", "signal_label", "source_url", "duration_ms"]

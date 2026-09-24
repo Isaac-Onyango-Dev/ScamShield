@@ -3,7 +3,7 @@ import { escapeCell, toCsv } from "../client/src/lib/csv";
 
 /** Minimal RFC 4180 parser used to prove the output round-trips. */
 function parse(csv: string): string[][] {
-    const text = csv.replace(/^﻿/, "");
+    const text = csv.replace(/^\uFEFF/, "");
     const rows: string[][] = [];
     let row: string[] = [];
     let field = "";
@@ -49,7 +49,7 @@ describe("CSV export", () => {
         const out = toCsv([
             ["x", 1, true],
             ["", null, "y"],
-        ]).replace(/^﻿/, "");
+        ]).replace(/^\uFEFF/, "");
         for (const line of out.split("\r\n").filter(Boolean)) for (const field of line.split(",")) expect(field).toMatch(/^".*"$/s);
     });
 
@@ -59,7 +59,7 @@ describe("CSV export", () => {
     });
 
     it("terminates rows with CRLF", () => {
-        expect(toCsv([["a"], ["b"]])).toBe('﻿"a"\r\n"b"\r\n');
+        expect(toCsv([["a"], ["b"]])).toBe('\uFEFF"a"\r\n"b"\r\n');
     });
 
     it("starts with a UTF-8 BOM", () => {

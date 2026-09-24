@@ -1,5 +1,5 @@
 import path from "node:path";
-import { MESSAGE, messageReport, stats } from "./fixtures/reports";
+import { MESSAGE, messageReport } from "./fixtures/reports";
 import { fullStream } from "./fixtures/sse";
 import { expect, test } from "./support/test";
 
@@ -22,13 +22,5 @@ for (const scheme of ["light", "dark"] as const) {
             await page.screenshot({ path: path.join(OUT, `screenshot-${scheme}.png`), fullPage: false });
         });
 
-        test(`@screenshots home page in ${scheme} mode`, async ({ page, api, app }) => {
-            test.skip(!process.env.CAPTURE_SCREENSHOTS, "set CAPTURE_SCREENSHOTS=1 to regenerate");
-            await api.stats(stats);
-            await page.goto("/");
-            await expect(app.statsRegion()).toBeVisible();
-            await app.settle();
-            await page.screenshot({ path: path.join(OUT, `home-${scheme}.png`), fullPage: true });
-        });
     });
 }

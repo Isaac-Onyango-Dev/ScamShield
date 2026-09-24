@@ -1,9 +1,10 @@
 # Architecture
 
 ```
-            ┌──────────────────────────── client (React + Vite + Tailwind) ──────────────────────────┐
+            ┌──────────────────────────── client (React + Vite + Tailwind tokens) ───────────────────┐
             │  SearchBox ─detect()─▶ /search?q=…  ──EventSource──▶ /api/lookup/stream                 │
-            │  VerdictPanel (gauge, red flags, trust, advice)   CheckCard × N (fill in as they stream) │
+            │  LookupStatus (one live region) · VerdictPanel/VerdictMeter · FindingsTable + filter    │
+            │  CheckCard × N (fill in as they stream) · ReportDialog · JSON/CSV export               │
             └───────────────────────────────────────────────┬────────────────────────────────────────┘
                                                             │ SSE / JSON
 ┌───────────────────────────────────────── server (Express) ▼─────────────────────────────────────────┐
@@ -38,13 +39,29 @@
 | **SQLite + WAL** | Zero-ops, fast, single-file backups | Single node. For horizontal scale, move to Postgres (drizzle makes this mechanical) and Redis for rate limits and cache |
 | **Cache keyed by `sha256(type:normalized)`**, invalidated on report | Avoids hammering free APIs; community changes show up immediately | Up to `LOOKUP_CACHE_TTL_MINUTES` of staleness for external data (users can Re-scan) |
 
+## Client and design system
+
+- **Tokens:** `client/src/styles/tokens.css` holds every colour, type step, radius and duration for light and dark (dark follows `prefers-color-scheme`, no JavaScript). `tailwind.config.ts` replaces Tailwind's default scales with these tokens, so off-scale utilities don't exist; `scripts/lint-design.mjs` (strict in CI) blocks raw colours, arbitrary values, gradients, decorative blur, emoji and marketing copy; `scripts/check-contrast.mjs` verifies WCAG AA for every token pair.
+- **Primitives** live in `client/src/components/ui/` (Button, Badge, StatusBadge, Card, ExternalLink, SourceLink, CopyButton, Skeleton, InlineAlert, EmptyState, Spinner). Statuses, levels and severities map to one of four tones plus a word and an icon shape (`lib/status.ts`), so colour is never the only signal.
+- **Streaming UI:** `lib/api.ts` keeps the previous results on screen during a refresh, types errors (invalid input, rate limit with `Retry-After`, network, server) and, when an `EventSource` fails before any event, asks once more with `fetch` to learn why, aborting that request if it turns out to be a healthy stream.
+- **Fonts:** Inter and JetBrains Mono (latin subset, variable, OFL) are self-hosted from `client/public/fonts`, so there are no third-party requests.
+
+## Deployment facts in the page
+
+`client/index.html` is a template. On every HTML response the server (`server/index.ts`, `server/lib/siteUrl.ts`) fills:
+
+- `%SITE_URL%` / `%PATH%`: absolute `og:url`, `og:image`, `twitter:image` and canonical link from `SITE_URL` (or `RENDER_EXTERNAL_URL`); the query string is never included because lookups carry personal data. Production refuses to start without a site URL.
+- `%STORAGE_MODE%`: `persistent` or `ephemeral` from `STORAGE_PERSISTENT`. On ephemeral storage the UI says reports are temporary and counters count since the last restart; an unfilled placeholder is treated as ephemeral.
+
+The Vite dev server fills the same placeholders; the production build keeps them for the server.
+
 ## Security
 
 - **SSRF:** the only check that opens a socket to a user-controlled host (TLS) resolves the host first and refuses loopback, RFC1918, link-local (cloud metadata), CGNAT, multicast and reserved ranges (`lib/netguard.ts`). URLs are **never fetched**.
 - **Input:** zod-validated, max 4000 chars, JSON body limit 32 KB.
 - **Abuse:** per-IP rate limits (`TRUST_PROXY` must match your proxy depth). Reports are de-duplicated per `sha256(salt:ip)`; raw IPs are never stored.
 - **Privacy:** request logs contain the path only, never the query string. Infostealer passwords are never shown or stored. The cache is short-lived and purged every 15 minutes.
-- **Headers:** helmet CSP (`script-src 'self'`), `no-referrer`, and no `x-powered-by`. Outbound links use `noopener noreferrer nofollow`.
+- **Headers:** helmet CSP (`script-src 'self'`, fonts and scripts self-hosted), `no-referrer`, and no `x-powered-by`. Every outbound link goes through `components/ui/ExternalLink.tsx`, which sets `noopener noreferrer nofollow`.
 
 ## Data model (`shared/schema.ts`)
 

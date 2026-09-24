@@ -1,6 +1,6 @@
 # ScamShield redesign plan
 
-Status: **plan only, no application code has changed.** Baseline commit: `86fd98a`, branch `claude/bold-dirac-rk5uw8`.
+Status: **implemented** (P0–P8 complete on branch `claude/bold-dirac-rk5uw8`; baseline commit `86fd98a`). Open follow-up: FU-1 (§9).
 Companion file: [`REDESIGN_CHECKLIST.md`](REDESIGN_CHECKLIST.md), the definition of done. Every item there can be checked with a command.
 
 ### Decisions log (answers to the open questions, 2026-09-24)
@@ -656,14 +656,14 @@ Removed: the "works like hosted tools such as EmailOSINT" comparison, which is m
 | Phase | Scope | Exit criteria (checklist IDs) | Size |
 |---|---|---|---|
 | **P0 Safety net** | **No application code changes.** Playwright `@playwright/test@1.56.1` + `@axe-core/playwright@4.13.0`. `tests/e2e/` specs assert behaviour through a **page-object layer** (`tests/e2e/support/app.ts`), which is the only file P2–P5 should need to touch when wording and markup change. Typed fixtures from `shared/types.ts` drive `page.route()` mocks for `/api/stats`, `/api/sources`, `/api/reports` and SSE bodies for `/api/lookup/stream`; a **catch-all guard** fails any test that reaches an unmocked `/api/*`. One tagged test per F1–F26 (`@F01`…); F27 is `tests/api.test.ts`. Axe runs as a **ratchet**: violations must be a subset of the committed `tests/e2e/a11y-baseline/`, which must be empty by P6. `scripts/lint-design.mjs` in report-only mode. CI: `actions/cache@v4` on `~/.cache/ms-playwright` keyed by `${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}`; on cache **miss** `npx playwright install --with-deps chromium`, on **hit** `npx playwright install-deps chromium` (OS packages aren't in the cache); upload the HTML report on failure | GATE-04, FEAT-*, E2E-* | M · **done** (56 e2e tests; baseline mirrors S1 plus #33) |
-| **P1 Foundation** | `tokens.css`, `base.css`, `fonts.css` + `npm run fonts:vendor` (§3.2.1), `check-contrast.mjs`; Tailwind **extend** mapping (old classes still compile); primitives in `components/ui/` | TOK-*, A11Y-02 | M |
-| **P2 Shell** | Layout, skip link, Logo placeholder (`currentColor` wordmark), footer, 404, `index.html` colour-scheme metas; **site URL resolution + `<head>` injection** (§4.1.1), with `SITE_URL=` in `.env.example` and DEPLOYMENT.md | A11Y-05/06, SHELL-* | S |
-| **P3 Results** | Search page, VerdictPanel, CheckCard, overview table, filter, states, fallback-fetch fix, CSV export, ReportDialog | STATE-*, RES-*, A11Y-* on `/search` | L |
-| **P4 Home** | New home composition | HOME-* | S |
-| **P5 Sources/API** | Tables, states, copy buttons | SRC-*, API-* | S |
-| **P6 Cleanup sweep** | Delete/merge per §5; Tailwind switches from `extend` to **override**; `lint-design` becomes **blocking**; axe becomes **blocking** (0 violations) | CLEAN-*, SLOP-* | M |
-| **P7 Logo** | SVG mark, favicon set, OG image, `Logo.tsx` | LOGO-* | S |
-| **P8 Docs** | README, ARCHITECTURE, DEPLOYMENT, screenshots | README-* | S |
+| **P1 Foundation** | `tokens.css`, `base.css`, `fonts.css` + `npm run fonts:vendor` (§3.2.1), `check-contrast.mjs`; Tailwind **extend** mapping (old classes still compile); primitives in `components/ui/` | TOK-*, A11Y-02 | M · **done** |
+| **P2 Shell** | Layout, skip link, Logo placeholder (`currentColor` wordmark), footer, 404, `index.html` colour-scheme metas; **site URL resolution + `<head>` injection** (§4.1.1), with `SITE_URL=` in `.env.example` and DEPLOYMENT.md | A11Y-05/06, SHELL-* | S · **done** |
+| **P3 Results** | Search page, VerdictPanel, CheckCard, overview table, filter, states, fallback-fetch fix, CSV export, ReportDialog | STATE-*, RES-*, A11Y-* on `/search` | L · **done** |
+| **P4 Home** | New home composition | HOME-* | S · **done** |
+| **P5 Sources/API** | Tables, states, copy buttons | SRC-*, API-* | S · **done** |
+| **P6 Cleanup sweep** | Delete/merge per §5; Tailwind switches from `extend` to **override**; `lint-design` becomes **blocking**; axe becomes **blocking** (0 violations) | CLEAN-*, SLOP-* | M · **done** |
+| **P7 Logo** | SVG mark, favicon set, OG image, `Logo.tsx` | LOGO-* | S · **done** |
+| **P8 Docs** | README, ARCHITECTURE, DEPLOYMENT, screenshots | README-* | S · **done** |
 
 Order rationale: the safety net comes first because streaming UI regresses silently. Tokens come before pages so no page is styled twice. Results (P3) is the highest-value screen, so it comes before Home. The cleanup sweep runs after all pages are migrated so the Tailwind override can't silently drop classes on pages not yet migrated. The logo comes before the README because the README embeds it.
 

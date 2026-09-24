@@ -19,5 +19,5 @@ export function escapeCell(value: CsvValue): string {
 }
 
 export function toCsv(rows: CsvValue[][]): string {
-    return "﻿" + rows.map((row) => row.map(escapeCell).join(",") + "\r\n").join("");
+    return "\uFEFF" + rows.map((row) => row.map(escapeCell).join(",") + "\r\n").join("");
 }
