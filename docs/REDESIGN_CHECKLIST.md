@@ -90,7 +90,7 @@ Conventions:
 - [ ] **SLOP-18** No ad-hoc durations or `transition-all`. Verify: `grep -rnoE "transition-all|duration-[0-9]+|(^|[^0-9a-z])\.[0-9]+s\b|\b[0-9]+\.[0-9]+s\b|[0-9]{3,}ms" client/src tailwind.config.ts | grep -v "styles/tokens.css"` → no output (today: 6 hits)
 - [ ] **SLOP-19** No decorative infinite animation; at most one spinner component. Verify: `grep -rnE "infinite|animate-(spin|ping|pulse|bounce)" client/src tailwind.config.ts` → matches only in `client/src/components/ui/Spinner.tsx` (today: 5 hits in 4 files)
 - [ ] **SLOP-20** Reduced motion respected. Verify: `grep -c "prefers-reduced-motion" client/src/styles/base.css` ≥ 1 **and** FEAT-26 passes → ≥1 (today: in `index.css` only)
-- [ ] **SLOP-21** Literal, consistent verbs. Verify: `grep -rnE "Investigat|Re-scan|Querying source|intelligence module|Report as malicious" client/src` → no output; `grep -c "Look up" client/src/components/SearchBox.tsx` ≥ 1 → as stated (today: 4 + 0)
+- [ ] **SLOP-21** Literal, consistent verbs. Verify: `grep -rnE "Investigat|Re-scan|Querying source|intelligence module|Report as malicious" client/src` → no output; `grep -c "Look up" client/src/components/SearchBox.tsx` ≥ 1 → as stated (today: 8 + 0)
 - [ ] **SLOP-22** No AI-cliché or hacker icons. Verify: `grep -rnwE "Sparkles|Fingerprint|Wand2?|Rocket|Zap|Skull|Terminal" client/src` → no output (today: 4 hits)
 - [ ] **SLOP-23** Home headline is task-focused. Verify: `grep -c "Check an email, link, domain, IP, phone number or message." client/src/pages/Home.tsx` → `1` (today: 0)
 - [ ] **SLOP-24** Results have an overview table and filter. Verify: `grep -c "<table" client/src/components/FindingsTable.tsx` ≥ 1 **and** `npx playwright test --grep @findings-filter` → pass (today: file absent)
@@ -167,6 +167,8 @@ Conventions:
 - [ ] **E2E-03** An a11y baseline exists for every project × page. Verify: `for p in light dark mobile-light reduced-motion; do for g in home search sources api not-found report-dialog; do test -f tests/e2e/a11y-baseline/$p/$g.json || echo "missing $p/$g"; done; done` → no output
 - [ ] **E2E-04** Final state of A11Y-01: every baseline is empty. Verify: `node -e "const fs=require('fs'),path=require('path');const d='tests/e2e/a11y-baseline';let bad=[];for(const p of fs.readdirSync(d))for(const f of fs.readdirSync(path.join(d,p))){const j=JSON.parse(fs.readFileSync(path.join(d,p,f)));if(j.length)bad.push(p+'/'+f+': '+j.join(','))}console.log(bad.length?bad.join('\n'):'EMPTY')"` → `EMPTY` (today: the baseline mirrors audit S1)
 - [ ] **E2E-05** Specs never hard-code UI wording or selectors; those live in the page object. Verify: `grep -nE "getByRole|getByText|locator\(" tests/e2e/*.spec.ts | grep -v "app\." ` → no output
+- [ ] **E2E-06** No known-bug markers remain (today: `@bug-31`, fixed in P3). Verify: `grep -rn "test.fail(" tests/e2e` → no output
+- [ ] **E2E-07** API docs load directly (audit #32). Verify: `grep -c 'path="/api-docs"' client/src/App.tsx` → `1` **and** `grep -c "gotoApiDocs" tests/e2e/support/app.ts` still passes with a plain `page.goto("/api-docs")` inside it
 
 ## Accessibility (WCAG 2.2 AA)
 

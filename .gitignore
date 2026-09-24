@@ -9,3 +9,6 @@ dist
 *.db-shm
 *.db-wal
 coverage
+test-results
+playwright-report
+blob-report

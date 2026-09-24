@@ -31,6 +31,39 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Report-only until the redesign's cleanup phase (docs/REDESIGN_PLAN.md §7.1, P6).
+      - name: Design lint
+        run: npm run lint:design
+
+      # Chromium only; the browser directory is cached, OS packages are reinstalled on a hit.
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright Chromium
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install Playwright Chromium system dependencies
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: E2E and accessibility tests
+        run: npm run test:e2e
+        env:
+          E2E_NO_BUILD: "1"
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 14
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:

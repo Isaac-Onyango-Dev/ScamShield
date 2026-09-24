@@ -140,7 +140,9 @@ Contrast ratios were computed with the WCAG 2.x relative-luminance formula again
 | 28 | **Theme hard-coded to dark:** `class="bg-ink-950"`, `theme-color #07090d`, `color-scheme: dark` | `index.html:2,7`, `index.css:7` |
 | 29 | **Stale screenshots:** they show `0.0 s` and a mid-word monospace break that the current code no longer produces | `docs/home.png`, `docs/lookup-message.png` |
 | 30 | **Object URL revoked synchronously after `click()`**, which can cancel downloads in some browsers | `Search.tsx:47-48` |
-| 31 | **Refresh blanks the results.** "Re-scan", and the re-run after a successful report, reset `target` to `undefined`, so the header, verdict and all cards unmount until the new stream starts (§4.7) | `lib/api.ts:48-49`, `Search.tsx:71` |
+| 31 | **Refresh blanks the results.** "Re-scan", and the re-run after a successful report, reset `target` to `undefined`, so the header, verdict and all cards unmount until the new stream starts. After a successful report this also **remounts the report dialog, so the "Report received" confirmation is never shown** (§4.7; pinned by the `test.fail` e2e test `@bug-31`) | `lib/api.ts:48-49`, `Search.tsx:71` |
+| 32 | **`/api` can't be loaded directly.** The Express API router is mounted at `/api` and its catch-all answers `GET /api` with the JSON `{"error":"Not found"}`, so the API docs page only works when reached through the in-app nav link; reload, bookmark or shared link all fail | `server/app.ts` (`app.use("/api", …)`), `server/routes/api.ts:157`, `App.tsx` route `/api` |
+| 33 | **Code examples aren't keyboard-scrollable.** The horizontally scrolling `<pre>` blocks on the API page can't receive focus (axe `scrollable-region-focusable`, found by the P0 baseline) | `ApiDocs.tsx:44` |
 
 ---
 
@@ -532,6 +534,8 @@ Why these rules:
 | Examples not copyable | `CopyButton` on each `<pre>` | Copy actions |
 | Intro paragraph | Adds a short "Rate limits" subsection: lookups per minute per IP, `RateLimit`/`Retry-After` headers | Documents the behaviour the UI now uses |
 | `POST /api/reports` description | Adds the storage sentence from §4.8 when the mode is `ephemeral` | D9 |
+| Route `/api` (breaks on direct load, #32) | Client route renamed to **`/api-docs`**; nav label stays "API". No server change (GATE-08) | Deep links, reloads and shared links work |
+| `<pre>` examples not focusable (#33) | `tabIndex={0}` + `aria-label="Example: <endpoint>"` on each scrollable block, visible focus ring | WCAG 2.1.1 keyboard access |
 
 ### 4.7 Refresh keeps results on screen (audit #31)
 
@@ -651,7 +655,7 @@ Removed: the "works like hosted tools such as EmailOSINT" comparison, which is m
 
 | Phase | Scope | Exit criteria (checklist IDs) | Size |
 |---|---|---|---|
-| **P0 Safety net** | **No application code changes.** Playwright `@playwright/test@1.56.1` + `@axe-core/playwright@4.13.0`. `tests/e2e/` specs assert behaviour through a **page-object layer** (`tests/e2e/support/app.ts`), which is the only file P2–P5 should need to touch when wording and markup change. Typed fixtures from `shared/types.ts` drive `page.route()` mocks for `/api/stats`, `/api/sources`, `/api/reports` and SSE bodies for `/api/lookup/stream`; a **catch-all guard** fails any test that reaches an unmocked `/api/*`. One tagged test per F1–F26 (`@F01`…); F27 is `tests/api.test.ts`. Axe runs as a **ratchet**: violations must be a subset of the committed `tests/e2e/a11y-baseline/`, which must be empty by P6. `scripts/lint-design.mjs` in report-only mode. CI: `actions/cache@v4` on `~/.cache/ms-playwright` keyed by `${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}`; on cache **miss** `npx playwright install --with-deps chromium`, on **hit** `npx playwright install-deps chromium` (OS packages aren't in the cache); upload the HTML report on failure | GATE-04, FEAT-*, E2E-* | M |
+| **P0 Safety net** | **No application code changes.** Playwright `@playwright/test@1.56.1` + `@axe-core/playwright@4.13.0`. `tests/e2e/` specs assert behaviour through a **page-object layer** (`tests/e2e/support/app.ts`), which is the only file P2–P5 should need to touch when wording and markup change. Typed fixtures from `shared/types.ts` drive `page.route()` mocks for `/api/stats`, `/api/sources`, `/api/reports` and SSE bodies for `/api/lookup/stream`; a **catch-all guard** fails any test that reaches an unmocked `/api/*`. One tagged test per F1–F26 (`@F01`…); F27 is `tests/api.test.ts`. Axe runs as a **ratchet**: violations must be a subset of the committed `tests/e2e/a11y-baseline/`, which must be empty by P6. `scripts/lint-design.mjs` in report-only mode. CI: `actions/cache@v4` on `~/.cache/ms-playwright` keyed by `${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}`; on cache **miss** `npx playwright install --with-deps chromium`, on **hit** `npx playwright install-deps chromium` (OS packages aren't in the cache); upload the HTML report on failure | GATE-04, FEAT-*, E2E-* | M · **done** (56 e2e tests; baseline mirrors S1 plus #33) |
 | **P1 Foundation** | `tokens.css`, `base.css`, `fonts.css` + `npm run fonts:vendor` (§3.2.1), `check-contrast.mjs`; Tailwind **extend** mapping (old classes still compile); primitives in `components/ui/` | TOK-*, A11Y-02 | M |
 | **P2 Shell** | Layout, skip link, Logo placeholder (`currentColor` wordmark), footer, 404, `index.html` colour-scheme metas; **site URL resolution + `<head>` injection** (§4.1.1), with `SITE_URL=` in `.env.example` and DEPLOYMENT.md | A11Y-05/06, SHELL-* | S |
 | **P3 Results** | Search page, VerdictPanel, CheckCard, overview table, filter, states, fallback-fetch fix, CSV export, ReportDialog | STATE-*, RES-*, A11Y-* on `/search` | L |
