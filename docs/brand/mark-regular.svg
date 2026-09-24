@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <!-- ScamShield mark, regular optical size (>= 24px). 24-unit grid; shield holding a lens. -->
+  <path d="M12 2.75 19.25 5.5V11c0 4.6-3 8.3-7.25 10.25C7.75 19.3 4.75 15.6 4.75 11V5.5Z"/>
+  <circle cx="11.25" cy="10.5" r="3.25"/>
+  <path d="m13.6 12.85 2.4 2.4"/>
+</svg>

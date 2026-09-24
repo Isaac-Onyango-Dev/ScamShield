@@ -726,7 +726,7 @@ Order rationale: the safety net comes first because streaming UI regresses silen
 | `client/public/og.png` | 1200×630: `bg` neutral, mark + wordmark + one line "Scam and OSINT lookups from public sources", no gradients |
 | `index.html` | `<link rel="icon" href="/favicon.svg" type="image/svg+xml">`, PNG fallback, `apple-touch-icon`, absolute `og:image` from `%SITE_URL%` (§4.1.1), `og:image:width/height`, `twitter:card=summary_large_image` |
 
-The PNGs are rasterised once from the SVG sources with `npx --yes @resvg/resvg-js-cli`. The SVG masters are committed under `docs/brand/`. Nothing is added to `package.json`.
+The PNGs are rasterised from the SVG masters with Playwright's Chromium (`npm run brand:render`, `scripts/render-brand.mjs`; `playwright-core` is already a devDependency, so no new tool). The OG card is laid out in HTML with the vendored Inter file, so no `<text>` ever enters an SVG. The SVG masters are committed under `docs/brand/`.
 
 ---
 

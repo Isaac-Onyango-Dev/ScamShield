@@ -21,7 +21,8 @@
     "data:disposable": "node scripts/update-disposable.mjs",
     "lint:design": "node scripts/lint-design.mjs --strict",
     "fonts:vendor": "node scripts/vendor-fonts.mjs",
-    "check:contrast": "node scripts/check-contrast.mjs"
+    "check:contrast": "node scripts/check-contrast.mjs",
+    "brand:render": "node scripts/render-brand.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.60.5",
