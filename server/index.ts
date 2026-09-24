@@ -15,7 +15,10 @@ import { createApp } from "./app";
 import { seed } from "./seed";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const isProd = config.NODE_ENV === "production";
+// Serve the built client whenever we're running from the bundle (dist/), even if the
+// host's start command forgot NODE_ENV=production (e.g. a bare `node dist/index.js`).
+const bundledClient = fs.existsSync(path.join(here, "public", "index.html"));
+const isProd = config.NODE_ENV === "production" || bundledClient;
 // Bundled server lives in dist/ next to dist/migrations and dist/public.
 const migrationsFolder = fs.existsSync(path.join(here, "migrations")) ? path.join(here, "migrations") : path.join(here, "../migrations");
 
