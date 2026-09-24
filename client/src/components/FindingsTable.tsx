@@ -69,7 +69,7 @@ export function FindingsTable({ sources, filter }: { sources: PlannedSource[]; f
                                 </a>
                             </td>
                             <td className="hidden px-4 py-2 align-top text-fg-secondary sm:table-cell">{s.result ? s.result.summary : <Skeleton className="w-3/4" />}</td>
-                            <td className="tabular px-4 py-2 text-right align-top text-caption text-fg-tertiary">{s.result && s.result.durationMs > 0 ? `${s.result.durationMs} ms` : ""}</td>
+                            <td className="tabular whitespace-nowrap px-4 py-2 text-right align-top text-caption text-fg-tertiary">{s.result && s.result.durationMs > 0 ? `${s.result.durationMs} ms` : ""}</td>
                         </tr>
                     ))}
                     {rows.length === 0 && (

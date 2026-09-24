@@ -28,7 +28,7 @@ export function looksRandom(local: string): boolean {
 }
 
 /** Brands whose name appears in the local part, e.g. "paypal.support" or "applesecurity". */
-export function brandsInLocalPart(local: string) {
+function brandsInLocalPart(local: string) {
     const tokens = local.toLowerCase().split(/[._+\-\d]+/).filter(Boolean);
     const compact = tokens.join("");
     return BRANDS.filter((b) =>

@@ -12,7 +12,7 @@ interface Pattern {
 }
 
 /** Social-engineering patterns drawn from FTC / Action Fraud / CA scam typologies. */
-export const PATTERNS: Pattern[] = [
+const PATTERNS: Pattern[] = [
     { id: "credentials", label: "Asks for passwords, PINs or verification codes", severity: "high",
       re: /\b((verify|confirm|update|validate)\s+(your\s+)?(account|identity|details|information|password|card)|(enter|share|send|provide|give|tell|forward|read out)\s+(me\s+|us\s+)?(your\s+|the\s+)?(password|pin|otp|one[- ]time (code|pin|password)|verification code|security code|cvv|card (number|details)|ssn|social security))/i },
     { id: "otp", label: "Requests a one-time code (account takeover tactic)", severity: "high",

@@ -9,7 +9,7 @@ const e = encodeURIComponent;
  * Hand-off links to specialist tools for deeper manual investigation.
  * Nothing is fetched — these are just well-formed deep links.
  */
-export function pivotsFor(target: Target, region: string): Item[] {
+function pivotsFor(target: Target, region: string): Item[] {
     const v = target.normalized;
     switch (target.type) {
         case "email": {

@@ -96,7 +96,7 @@ export function matchBrand(key: string, label: string, tokens: string[], compact
     return null;
 }
 
-export interface HostAnalysis {
+interface HostAnalysis {
     signals: Signal[];
     official?: Brand;
     impersonates?: Brand;

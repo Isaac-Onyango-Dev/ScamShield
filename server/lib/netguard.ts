@@ -32,7 +32,7 @@ function inV4Block(ip: string, base: string, bits: number): boolean {
     return (v4ToInt(ip) & mask) === (v4ToInt(base) & mask);
 }
 
-export type IpClass = "public" | "private" | "loopback" | "link-local" | "reserved" | "multicast" | "cgnat";
+type IpClass = "public" | "private" | "loopback" | "link-local" | "reserved" | "multicast" | "cgnat";
 
 export function classifyIp(ip: string): IpClass {
     const family = net.isIP(ip);

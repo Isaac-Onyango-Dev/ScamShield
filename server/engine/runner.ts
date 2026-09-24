@@ -11,7 +11,7 @@ function base(check: CheckDefinition) {
     return { id: check.id, name: check.name, category: check.category, source: check.source };
 }
 
-export function skippedResult(check: CheckDefinition, reason: string): CheckResult {
+function skippedResult(check: CheckDefinition, reason: string): CheckResult {
     return { ...base(check), status: "skipped", summary: reason, facts: [], signals: [], durationMs: 0 };
 }
 

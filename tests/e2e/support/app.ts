@@ -17,7 +17,7 @@ const CATEGORY_TITLES: Record<string, CheckCategory> = {
     "Identity & footprint": "identity",
     "Breach & leak exposure": "exposure",
     Infrastructure: "infrastructure",
-    "Investigate further": "pivots",
+    "Specialist tools": "pivots",
 };
 
 export const EXAMPLE_LABELS = ["Phishing domain", "Email", "Short link", "Phone", "IP", "SMS"] as const;
@@ -186,7 +186,7 @@ export class App {
     }
 
     scorePending(): Locator {
-        return this.page.locator('[role="meter"][aria-busy="true"]');
+        return this.page.locator('[data-testid="verdict-meter"][aria-busy="true"]');
     }
 
     verdictLabel(label: string): Locator {

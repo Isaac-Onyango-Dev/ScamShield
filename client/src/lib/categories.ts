@@ -10,5 +10,5 @@ export const CATEGORY_LABELS: Record<CheckCategory, { title: string; blurb: stri
     identity: { title: "Identity & footprint", blurb: "Public profiles and ownership signals" },
     exposure: { title: "Breach & leak exposure", blurb: "Data breaches and malware logs" },
     infrastructure: { title: "Infrastructure", blurb: "DNS, registration, certificates and networks" },
-    pivots: { title: "Investigate further", blurb: "Deep links to specialist tools" },
+    pivots: { title: "Specialist tools", blurb: "Deep links to other lookup services" },
 };

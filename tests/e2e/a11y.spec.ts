@@ -2,10 +2,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import AxeBuilder from "@axe-core/playwright";
 import { MESSAGE, messageReport, sources, stats } from "./fixtures/reports";
-import { fullStream } from "./fixtures/sse";
+import { fullStream, partialStream } from "./fixtures/sse";
 import type { Api } from "./support/test";
 import type { App } from "./support/app";
-import { expect, test } from "./support/test";
+import { expect, test, useScriptedStream } from "./support/test";
 
 /**
  * Accessibility ratchet (docs/REDESIGN_PLAN.md §7.1, P0).
@@ -51,6 +51,33 @@ const PAGES: { name: string; open: (ctx: { page: import("@playwright/test").Page
             await api.sources(sources);
             await page.goto("/sources");
             await expect(app.aiSummariesFlag()).toBeVisible();
+        },
+    },
+    {
+        name: "search-error",
+        open: async ({ page, api, app }) => {
+            await api.stream(partialStream(messageReport(), ["community", "text.message"]));
+            await page.goto(`/search?q=${encodeURIComponent(MESSAGE)}`);
+            await expect(app.lookupError()).toBeVisible();
+        },
+    },
+    {
+        name: "search-rate-limited",
+        open: async ({ page, api, app }) => {
+            await api.stream(JSON.stringify({ error: "Too many lookups" }), { status: 429, headers: { "retry-after": "42" } });
+            await page.goto(`/search?q=${encodeURIComponent(MESSAGE)}`);
+            await expect(app.rateLimitCountdown()).toBeVisible();
+        },
+    },
+    {
+        name: "search-streaming",
+        open: async ({ page, app }) => {
+            const stream = await useScriptedStream(page);
+            const report = messageReport();
+            await page.goto(`/search?q=${encodeURIComponent(MESSAGE)}`);
+            await stream.emit({ type: "start", target: report.target, checks: report.checks.map(({ id, name, category }) => ({ id, name, category })) });
+            await stream.emit({ type: "check", result: report.checks[0] });
+            await expect(app.lookupProgress()).toBeVisible();
         },
     },
     { name: "api", open: async ({ app }) => app.gotoApiDocs() },

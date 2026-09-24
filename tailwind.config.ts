@@ -43,24 +43,9 @@ const tokens = {
 
 export default {
     content: ["./client/index.html", "./client/src/**/*.{ts,tsx}"],
-    theme: {
-        // Legacy palette and animations remain available until the P6 cleanup sweep, when the
-        // token scales move from `extend` to overriding the theme outright.
-        extend: {
-            ...tokens,
-            fontFamily: {},
-            colors: {
-                ...tokens.colors,
-                ink: { 950: "#07090d", 900: "#0b0f15", 850: "#10151d", 800: "#151b25", 700: "#1f2733", 600: "#2b3544" },
-                brand: { 300: "#7ee7c7", 400: "#3fd9a8", 500: "#19c08c", 600: "#0f9c71" },
-            },
-            keyframes: {
-                "fade-up": { from: { opacity: "0", transform: "translateY(6px)" }, to: { opacity: "1", transform: "none" } },
-                scan: { "0%": { transform: "translateX(-100%)" }, "100%": { transform: "translateX(300%)" } },
-            },
-            animation: { ...tokens.animation, "fade-up": "fade-up .35s ease-out both", scan: "scan 1.4s ease-in-out infinite" },
-        },
-        fontFamily: tokens.fontFamily,
-    },
+    // The token scales REPLACE Tailwind's defaults, so off-scale utilities (text-sm, mt-0.5,
+    // palette colours, rounded-2xl, long durations…) don't exist. scripts/lint-design.mjs guards
+    // arbitrary values.
+    theme: tokens,
     plugins: [],
 } satisfies Config;

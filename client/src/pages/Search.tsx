@@ -198,7 +198,7 @@ export function SearchPage() {
                                 {answered} of {total} sources answered
                             </p>
                         </div>
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 lg:shrink-0 lg:flex-nowrap">
                             <CopyButton value={window.location.href} label="Copy link" showLabel size="md" />
                             <div role="group" aria-label="Export report" className="flex gap-2">
                                 <Button onClick={() => report && exportJson(report)} disabled={!report}>

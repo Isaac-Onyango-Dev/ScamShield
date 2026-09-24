@@ -4,7 +4,7 @@ import type { DB } from "./db";
 import { commonScams, reportEvents, scamReports, statistics } from "../../shared/schema";
 import type { DashboardStats, ReportCategory, TargetType } from "../../shared/types";
 
-export interface CommunityRecord {
+interface CommunityRecord {
     reports: {
         count: number;
         lastReportedAt: string | null;

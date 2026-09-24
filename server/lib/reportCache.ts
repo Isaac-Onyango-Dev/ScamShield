@@ -4,7 +4,7 @@ import type { DB } from "./db";
 import { lookupCache } from "../../shared/schema";
 import type { LookupReport, Target } from "../../shared/types";
 
-export function cacheKey(target: Pick<Target, "type" | "normalized">): string {
+function cacheKey(target: Pick<Target, "type" | "normalized">): string {
     return crypto.createHash("sha256").update(`${target.type}:${target.normalized}`).digest("hex");
 }
 

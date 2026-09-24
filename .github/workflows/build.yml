@@ -34,7 +34,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      # Report-only until the redesign's cleanup phase (docs/REDESIGN_PLAN.md §7.1, P6).
+      # Blocking since P6: token-only styling and the anti-slop rules (docs/REDESIGN_CHECKLIST.md).
       - name: Design lint
         run: npm run lint:design
 

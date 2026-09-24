@@ -13,7 +13,7 @@ import { normalizePhone } from "../checks/phone";
 
 export class InputError extends Error {}
 
-export interface LookupDeps {
+interface LookupDeps {
     config: AppConfig;
     checks: CheckDefinition[];
     fetch: Fetcher;

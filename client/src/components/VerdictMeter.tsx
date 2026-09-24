@@ -15,7 +15,7 @@ export function VerdictMeter({ score, level, label }: { score: number | null; le
     const p = LEVELS[level];
     const pending = score === null;
     return (
-        <div data-testid="verdict-meter" className="flex flex-col gap-3">
+        <div data-testid="verdict-meter" aria-busy={pending} className="flex flex-col gap-3">
             <p id={labelId} className="text-footnote font-semibold text-fg-secondary">
                 Risk score
             </p>
@@ -30,18 +30,22 @@ export function VerdictMeter({ score, level, label }: { score: number | null; le
                     <StatusBadge presentation={{ ...p, label }} kind="level" value={level} className="mb-2" />
                 )}
             </div>
-            <div
-                role="meter"
-                aria-labelledby={labelId}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={pending ? undefined : score}
-                aria-valuetext={pending ? "Scoring in progress" : `${score} out of 100, ${label}`}
-                aria-busy={pending}
-                className="h-2 overflow-hidden rounded-full bg-surface-2"
-            >
-                <div className={cn("h-full rounded-full transition-[width] duration-slow", FILL[p.tone])} style={{ width: `${score ?? 0}%` }} />
-            </div>
+            {pending ? (
+                // A meter must carry a value (ARIA), so while scoring there is only an empty track.
+                <div aria-hidden className="h-2 rounded-full bg-surface-2" />
+            ) : (
+                <div
+                    role="meter"
+                    aria-labelledby={labelId}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={score}
+                    aria-valuetext={`${score} out of 100, ${label}`}
+                    className="h-2 overflow-hidden rounded-full bg-surface-2"
+                >
+                    <div className={cn("h-full rounded-full transition-[width] duration-slow", FILL[p.tone])} style={{ width: `${score}%` }} />
+                </div>
+            )}
         </div>
     );
 }

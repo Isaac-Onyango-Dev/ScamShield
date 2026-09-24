@@ -5,8 +5,8 @@ import type { CheckResult, RiskLevel, Severity, Signal, Verdict } from "../../sh
  * with a probability-like weight; they combine as 1 - Π(1 - w). Trust signals
  * dampen the result, but can never pull a critical finding below "high".
  */
-export const RISK_WEIGHTS: Record<Severity, number> = { info: 0, low: 0.08, medium: 0.2, high: 0.45, critical: 0.8 };
-export const TRUST_WEIGHTS: Record<Severity, number> = { info: 0, low: 0.1, medium: 0.25, high: 0.6, critical: 0.85 };
+const RISK_WEIGHTS: Record<Severity, number> = { info: 0, low: 0.08, medium: 0.2, high: 0.45, critical: 0.8 };
+const TRUST_WEIGHTS: Record<Severity, number> = { info: 0, low: 0.1, medium: 0.25, high: 0.6, critical: 0.85 };
 const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];
 
 export function levelFor(score: number): RiskLevel {
@@ -17,7 +17,7 @@ export function levelFor(score: number): RiskLevel {
     return "safe";
 }
 
-export const LEVEL_LABELS: Record<RiskLevel, string> = {
+const LEVEL_LABELS: Record<RiskLevel, string> = {
     safe: "No red flags found",
     low: "Low risk",
     medium: "Suspicious",

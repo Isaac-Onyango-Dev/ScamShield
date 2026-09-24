@@ -4,7 +4,7 @@ import { BRANDS, FREE_EMAIL_PROVIDERS, type Brand } from "../data/lists";
 
 const DISPOSABLE = new Set<string>(disposableList as string[]);
 
-export interface HostInfo {
+interface HostInfo {
     host: string;
     /** eTLD+1, e.g. "example.co.uk" — null for IPs or bare suffixes. */
     registrable: string | null;
@@ -46,10 +46,3 @@ export function officialBrandFor(host: string): Brand | undefined {
     );
 }
 
-export function brandCount(): number {
-    return BRANDS.length;
-}
-
-export function disposableCount(): number {
-    return DISPOSABLE.size;
-}

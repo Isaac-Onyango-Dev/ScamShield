@@ -1,6 +1,6 @@
 export type Fetcher = typeof fetch;
 
-export const USER_AGENT = "ScamShield/2.0 (+https://github.com/isaac-onyango-dev/scamshield)";
+const USER_AGENT = "ScamShield/2.0 (+https://github.com/isaac-onyango-dev/scamshield)";
 
 export class HttpError extends Error {
     constructor(

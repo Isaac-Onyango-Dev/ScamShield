@@ -25,7 +25,7 @@ export function createDnsClient(servers?: string): DnsClient {
     };
 }
 
-export type DnsOutcome<T> =
+type DnsOutcome<T> =
     | { ok: true; records: T[] }
     | { ok: false; code: "NXDOMAIN" | "NODATA" | "ERROR"; message: string };
 

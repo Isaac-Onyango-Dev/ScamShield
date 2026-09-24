@@ -31,14 +31,14 @@ const MAIL_PROVIDERS: [RegExp, string][] = [
     [/sendgrid\.net$/i, "SendGrid"],
 ];
 
-export function mailProvider(mx: string[]): string | undefined {
+function mailProvider(mx: string[]): string | undefined {
     for (const host of mx) for (const [re, name] of MAIL_PROVIDERS) if (re.test(host)) return name;
     return undefined;
 }
 
 const txtJoin = (records: string[][]) => records.map((r) => r.join(""));
 
-export function resolveA(ctx: CheckContext, host: string) {
+function resolveA(ctx: CheckContext, host: string) {
     return ctx.memo(`dns:A:${host}`, () => tryDns(() => ctx.dns.resolve4(host)));
 }
 
