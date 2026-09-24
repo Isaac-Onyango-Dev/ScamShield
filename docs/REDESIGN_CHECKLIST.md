@@ -98,17 +98,57 @@ Conventions:
 - [ ] **SLOP-26** Every source card shows source attribution. Verify: `npx playwright test --grep @source-attribution` (count of `[data-testid=source-card]` = count of `[data-testid=source-attribution]`) → pass (today: n/a)
 - [ ] **SLOP-27** Per-value copy with honest feedback. Verify: `npx playwright test --grep @copy` (success → "Copied"; denied clipboard → "Couldn't copy") → pass (today: copy shows success on failure (`Search.tsx:51-55`))
 - [ ] **SLOP-28** JSON and CSV export. Verify: `npx playwright test --grep "@export-json|@export-csv"` → pass (today: JSON only)
-- [ ] **SLOP-29** CSV is formula-injection safe. Verify: `npx vitest run tests/csv.test.ts` (asserts `=`, `+`, `-`, `@` prefixed with `'`) → exit 0 (today: file absent)
+- [ ] **SLOP-29** CSV is formula-injection safe. Verify: every `CSV-*` item below passes
 
 ## Tokens and foundation
 
 - [ ] **TOK-01** Token file with light default and dark override. Verify: `test -f client/src/styles/tokens.css && grep -c "prefers-color-scheme: dark" client/src/styles/tokens.css` → ≥1
 - [ ] **TOK-02** Tailwind theme **overrides** (not extends) the scales. Verify: `node --experimental-strip-types --no-warnings -e "import('./tailwind.config.ts').then(m=>{const t=m.default.theme;console.log(['colors','spacing','fontSize','borderRadius','transitionDuration'].map(k=>k+':'+((k in t)?'override':(t.extend&&k in t.extend)?'extend':'default')).join(' '))})"` → all five `override` (today: `colors:extend`, rest `default`)
-- [ ] **TOK-03** Fonts are actually bundled. Verify: `grep -rnE "@fontsource-variable/(inter|jetbrains-mono)" client/src | wc -l` → `2`; after build, `ls dist/public/assets/*.woff2 | wc -l` → ≥2
+- [ ] **TOK-03** Fonts are actually delivered (self-hosted, latin subset). Verify: every `FONT-*` item below passes
 - [ ] **TOK-04** OS theme metadata. Verify: `grep -c 'name="theme-color"' client/index.html` → `2` **and** `grep -c 'name="color-scheme" content="light dark"' client/index.html` → `1`
 - [ ] **TOK-05** E2E runs in both schemes and at mobile width. Verify: `grep -cE "colorScheme: ['\"](light|dark)['\"]" playwright.config.ts` → ≥2 **and** `grep -c "375" playwright.config.ts` → ≥1
 - [ ] **TOK-06** Primitives exist. Verify: `ls client/src/components/ui/{Button,Badge,StatusBadge,Card,ExternalLink,SourceLink,CopyButton,Skeleton,InlineAlert,EmptyState}.tsx` → exit 0
 - [ ] **TOK-07** Old stylesheet split. Verify: `ls client/src/styles/{tokens,base,index}.css` → exit 0 **and** `test ! -e client/src/index.css`
+
+## Site URL and metadata (D1)
+
+- [ ] **SITE-01** Resolver unit tests pass: `SITE_URL` wins over `RENDER_EXTERNAL_URL`; fallback to `RENDER_EXTERNAL_URL`; trailing slash stripped; relative, `ftp:`, path/query-bearing values rejected; `http:` rejected in production; dev/test fall back to `http://localhost:<PORT>`; `" < > &` escaped on injection. Verify: `npx vitest run tests/siteUrl.test.ts` → exit 0
+- [ ] **SITE-02** Production refuses to start without a site URL, with a clear message. Verify (after `npm run build`): `env -u SITE_URL -u RENDER_EXTERNAL_URL NODE_ENV=production DATABASE_URL=:memory: PORT=5099 timeout 10 node dist/index.js 2>&1 | grep -c "SITE_URL is required in production"` → `1` **and** `env -u SITE_URL -u RENDER_EXTERNAL_URL NODE_ENV=production DATABASE_URL=:memory: PORT=5099 timeout 10 node dist/index.js >/dev/null 2>&1; echo $?` → non-zero and not `124` (124 would mean it started listening)
+- [ ] **SITE-03** Served HTML carries absolute OG URLs with no query string. Verify: `SITE_URL=https://example.test NODE_ENV=production DATABASE_URL=:memory: PORT=5099 node dist/index.js & sleep 2; curl -s "http://localhost:5099/search?q=a%40b.com" | grep -oE '(property="og:(url|image)"|name="twitter:image"|rel="canonical") (content|href)="[^"]*"'; kill %1` → og:url and canonical = `https://example.test/search`, og:image and twitter:image = `https://example.test/og.png`; no `?` and no `a%40b.com` anywhere in the output
+- [ ] **SITE-04** No unreplaced placeholders on any HTML path. Verify (server from SITE-03 running): `for u in / /search /sources /api /nope /index.html; do curl -s "http://localhost:5099$u" | grep -c "%SITE_URL%\|%PATH%"; done` → `0` six times
+- [ ] **SITE-05** Render fallback works. Verify: as SITE-03 but with `env -u SITE_URL RENDER_EXTERNAL_URL=https://render.example.test` → og:image = `https://render.example.test/og.png`
+- [ ] **SITE-06** Self-hosters are told. Verify: `grep -c "^SITE_URL=$" .env.example` → `1` **and** `grep -c "SITE_URL" DEPLOYMENT.md` → ≥2 (Docker example + production checklist)
+- [ ] **SITE-07** Dev server also injects absolute URLs. Verify: `grep -c "transformIndexHtml" vite.config.ts` → `1` **and** `grep -c "siteUrl" vite.config.ts` → ≥1 (shared resolver, no duplicated logic)
+
+## Fonts (D6)
+
+- [ ] **FONT-01** Exactly the vendored files and their licences are present. Verify: `ls client/public/fonts` → exactly `OFL-Inter.txt  OFL-JetBrainsMono.txt  inter-latin-wght-5.3.0.woff2  jetbrains-mono-latin-wght-5.3.0.woff2`
+- [ ] **FONT-02** Files are woff2. Verify: `file client/public/fonts/*.woff2` → both `Web Open Font Format (Version 2)`
+- [ ] **FONT-03** Files are the upstream latin-subset variable fonts, byte for byte. Verify: `cmp client/public/fonts/inter-latin-wght-5.3.0.woff2 node_modules/@fontsource-variable/inter/files/inter-latin-wght-normal.woff2 && cmp client/public/fonts/jetbrains-mono-latin-wght-5.3.0.woff2 node_modules/@fontsource-variable/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2` → exit 0
+- [ ] **FONT-04** Filename version matches the installed package. Verify: `node -p "['inter','jetbrains-mono'].map(n=>JSON.parse(require('fs').readFileSync('node_modules/@fontsource-variable/'+n+'/package.json')).version).join()"` → `5.3.0,5.3.0` (update filenames if the version changes)
+- [ ] **FONT-05** Vendoring is reproducible. Verify: `npm run fonts:vendor && git diff --exit-code -- client/public/fonts` → exit 0
+- [ ] **FONT-06** `font-display: swap` and a latin `unicode-range` on both faces. Verify: `grep -c "font-display: swap" client/src/styles/fonts.css` → `2` **and** `grep -c "unicode-range" client/src/styles/fonts.css` → `2`
+- [ ] **FONT-07** Exactly one preload, and it's the primary Inter file. Verify: `grep -c 'rel="preload"' client/index.html` → `1` **and** `grep -c '<link rel="preload" href="/fonts/inter-latin-wght-5.3.0.woff2" as="font" type="font/woff2" crossorigin' client/index.html` → `1`
+- [ ] **FONT-08** System font stacks as fallback. Verify: `grep -cE '^\s*--font-sans: "Inter Variable",.*-apple-system.*system-ui.*sans-serif;' client/src/styles/tokens.css` → `1` **and** `grep -cE '^\s*--font-mono: "JetBrains Mono Variable",.*ui-monospace.*monospace;' client/src/styles/tokens.css` → `1`
+- [ ] **FONT-09** OFL licences ship with the build. Verify (after build): `grep -il "SIL Open Font License" dist/public/fonts/OFL-Inter.txt dist/public/fonts/OFL-JetBrainsMono.txt | wc -l` → `2`
+- [ ] **FONT-10** Font packages are dev-only and never imported at runtime. Verify: `node -p "const p=require('./package.json');['@fontsource-variable/inter','@fontsource-variable/jetbrains-mono'].every(d=>p.devDependencies?.[d]&&!p.dependencies?.[d])"` → `true` **and** `grep -rn "@fontsource" client/src` → no output
+- [ ] **FONT-11** Versioned fonts are cached immutably. Verify (server from SITE-03 running): `curl -sI http://localhost:5099/fonts/inter-latin-wght-5.3.0.woff2 | grep -ci "immutable"` → `1`
+
+## CSV export (D2)
+
+- [ ] **CSV-01** CSV unit tests pass. Verify: `npx vitest run tests/csv.test.ts` → exit 0
+- [ ] **CSV-02** Every required case has a named test. Verify: `for t in 'neutralises leading "="' 'neutralises leading "+"' 'neutralises leading "-"' 'neutralises leading "@"' 'neutralises leading tab' 'neutralises leading carriage return' 'does not prefix a dangerous character that is not leading' 'does not prefix safe values' 'quotes fields containing commas' 'doubles embedded double quotes' 'keeps LF newlines inside quoted fields' 'keeps CRLF newlines inside quoted fields' 'quotes every field' 'renders null and undefined as empty quoted fields' 'terminates rows with CRLF' 'starts with a UTF-8 BOM' 'round-trips through a CSV parser'; do grep -qF -- "$t" tests/csv.test.ts || echo "missing: $t"; done` → no output
+- [ ] **CSV-03** Encoder is pure and emits a BOM. Verify: `grep -cE "\bdocument\b|\bwindow\b" client/src/lib/csv.ts` → `0` **and** `grep -c 'uFEFF' client/src/lib/csv.ts` → ≥1
+- [ ] **CSV-04** Downloaded file is correct end to end. Verify: `npx playwright test --grep @export-csv` (asserts the filename `scamshield-<type>-<digits>.csv`, first bytes `EF BB BF`, the header row equals the column list in plan §4.3.1, CRLF line endings, and a fixture signal `=HYPERLINK("http://x","y")` exported as `"'=HYPERLINK(""http://x"",""y"")"`)
+- [ ] **CSV-05** One encoder only. Verify: `grep -rln "text/csv" client/src` → exactly one file
+
+## CI (D3)
+
+- [ ] **CI-01** Chromium is the only browser installed. Verify: `grep -c "npx playwright install --with-deps chromium" .github/workflows/build.yml` → `1` **and** `grep -n "playwright install" .github/workflows/build.yml | grep -v "chromium"` → no output
+- [ ] **CI-02** Browser directory is cached. Verify: `grep -c "actions/cache@v4" .github/workflows/build.yml` → ≥1 **and** `grep -c "ms-playwright" .github/workflows/build.yml` → ≥1
+- [ ] **CI-03** OS dependencies are still installed on a cache hit. Verify: `grep -c "npx playwright install-deps chromium" .github/workflows/build.yml` → `1`
+- [ ] **CI-04** Test config defines Chromium projects only. Verify: `grep -ciE "firefox|webkit" playwright.config.ts` → `0`
+- [ ] **CI-05** Test tooling pinned exactly. Verify: `node -p "const d=require('./package.json').devDependencies;[d['@playwright/test'],d['@axe-core/playwright']].join()"` → two exact versions (no `^` or `~`)
 
 ## Accessibility (WCAG 2.2 AA)
 
@@ -131,7 +171,9 @@ Conventions:
 - [ ] **SHELL-02** 404 copy is literal. Verify: `grep -c "Go to lookup" client/src/App.tsx` → `1`
 - [ ] **HOME-01** Capability overview is one table/definition list, not icon cards. Verify: `grep -cE "<table|<dl" client/src/pages/Home.tsx` → ≥1 **and** `grep -c "CAPABILITIES.map(({ icon" client/src/pages/Home.tsx` → `0`
 - [ ] **HOME-02** Hero decorations removed. Verify: `grep -cE "grid-bg|blur-3xl|Free · open source" client/src/pages/Home.tsx` → `0` (today 3)
-- [ ] **RES-01** Verdict meter reflects the score. Verify: `npx playwright test --grep @verdict-meter` (`role=meter` `aria-valuenow` = fixture score)
+- [ ] **HOME-03** Zero-valued stats are never rendered (D4). Verify: `npx playwright test --grep @state-home-stats-zero` (fixture `{totalLookups:0,totalReports:0,reportsLast24h:0,knownScams:6}` → row text is exactly "6 known scam indicators"; fixture with all four at 0 → `[data-testid=stats-row]` count is 0, no separators rendered)
+- [ ] **HOME-04** Counter persistence decided before the counters work ships (§4.2.1, Q9). Verify: `grep -c "^| D9 " docs/REDESIGN_PLAN.md` → `1`
+- [ ] **RES-01** Verdict meter is accessible and never colour-only (D5). Verify: `grep -cE 'role="meter"|aria-valuemin="0"|aria-valuemax="100"|aria-valuenow=|aria-valuetext=' client/src/components/VerdictMeter.tsx` → `5` **and** `npx playwright test --grep @verdict-meter` (asserts `aria-valuenow` = fixture score, `aria-valuetext` = "<score> out of 100, <Level>", the visible number and level label are inside the same `[data-testid=verdict-meter]` row as the bar, and the pending state has `aria-busy="true"` and no `aria-valuenow`)
 - [ ] **RES-02** Red flags capped at 5, with "Show all N" and links to `#source-<id>`. Verify: `npx playwright test --grep @red-flags`
 - [ ] **RES-03** Message targets clamp to 3 lines with "Show full message". Verify: `npx playwright test --grep @message-target`
 - [ ] **RES-04** "Report…" is not styled as danger. Verify: `grep -nE "Report…" client/src/pages/Search.tsx` shows `variant="secondary"` on that line
@@ -164,7 +206,7 @@ Conventions:
 - [ ] **LOGO-05** Vector-pure marks (no raster, text, gradients, filters). Verify: `grep -lE "<image|<text|Gradient|<filter|base64" client/public/favicon.svg client/src/components/Logo.tsx docs/brand/*.svg` → no output
 - [ ] **LOGO-06** Favicon adapts to dark mode. Verify: `grep -c "prefers-color-scheme" client/public/favicon.svg` → ≥1
 - [ ] **LOGO-07** In-app mark uses the text colour. Verify: `grep -c "currentColor" client/src/components/Logo.tsx` → ≥1
-- [ ] **LOGO-08** Icons and OG wired correctly. Verify: `grep -cE 'rel="icon" href="/favicon.svg" type="image/svg\+xml"|rel="apple-touch-icon"|property="og:image" content="https://|property="og:image:width"|name="twitter:card"' client/index.html` → `5`
+- [ ] **LOGO-08** Icons and OG wired correctly in the template. Verify: `grep -cE 'rel="icon" href="/favicon.svg" type="image/svg\+xml"|rel="apple-touch-icon"|property="og:image" content="%SITE_URL%/og.png"|property="og:image:width"|name="twitter:card"' client/index.html` → `5` (absolute output is verified by `SITE-03`)
 - [ ] **LOGO-09** Home link is named. Verify: `grep -c 'aria-label="ScamShield home"' client/src/components/Layout.tsx` → `1`
 - [ ] **LOGO-10** Public assets are lighter. Verify: `du -cb client/public/* | tail -1` → < 150000 (today 318060)
 
@@ -190,15 +232,10 @@ Conventions:
 
 ---
 
-## Open questions
+## Decisions and open questions
 
-These block specific items. Defaults are shown in brackets.
+Decisions D1–D8 (2026-09-24) are recorded in the plan's decisions log and built into the items above (`SITE-*`, `CSV-*`, `CI-*`, `HOME-03`, `RES-01`, `FONT-*`).
 
-1. **Canonical site URL for `og:image`** (LOGO-08). OG crawlers need an absolute URL. Options: hard-code `https://scamshield-dkmg.onrender.com` (already used in `build.yml`), or read `%VITE_SITE_URL%` at build time. [Default: env var, with the Render URL in `render.yaml`.]
-2. **CSV export** (SLOP-28/29) is a new, additive feature. Keep it? [Default: yes.]
-3. **Playwright + axe dev dependencies** add about 1–2 min to CI but make ~45 items verifiable. OK? [Default: yes.]
-4. **Home counters** show zeros on fresh deploys. Keep them as a quiet caption row (plan §4.2), hide them until `totalLookups ≥ 100`, or move them to `/sources`? [Default: quiet caption row.]
-5. **Replace the semicircle gauge with a linear meter** (CLEAN-09, RES-01)? [Default: yes.]
-6. **Self-hosted Inter + JetBrains Mono vs pure system stack** (TOK-03). Self-hosted means consistent rendering and a dotted zero, at about 100 KB. The system stack is native on Apple devices, costs 0 KB, and varies elsewhere. [Default: self-hosted.]
-7. **Manual light/dark toggle**: deferred. It needs an external pre-paint script plus `localStorage`. Needed now? [Default: no, follow the OS.]
-8. **GitHub Pages redirect page** (`.github/workflows/build.yml:53`) has its own inline styling with `#2563eb`. Restyle it to match, or leave it? [Default: leave; out of scope.]
+**Still open (blocks `HOME-04` only):**
+
+- **Q9 Counter persistence:** is the live Render service using the persistent disk from `render.yaml` (paid plan, `/var/data`), or Free/ephemeral storage? See plan §4.2.1 for evidence and options (a)/(b)/(c).

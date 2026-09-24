@@ -3,6 +3,19 @@
 Status: **plan only, no application code has changed.** Baseline commit: `86fd98a`, branch `claude/bold-dirac-rk5uw8`.
 Companion file: [`REDESIGN_CHECKLIST.md`](REDESIGN_CHECKLIST.md), the definition of done. Every item there can be checked with a command.
 
+### Decisions log (answers to the open questions, 2026-09-24)
+
+| # | Topic | Decision | Where it lands |
+|---|---|---|---|
+| D1 | Absolute site URL | Read `SITE_URL`, fall back to `RENDER_EXTERNAL_URL`; **production startup fails with a clear error if neither is set**. `og:image` and `og:url` are always absolute | §4.1.1, `SITE-*` |
+| D2 | CSV export | Keep. OWASP CSV-injection escaping (prefix `'` for leading `=`, `+`, `-`, `@`, tab, CR), quote and escape every field, UTF-8 BOM, unit tests for each dangerous prefix plus commas, quotes and newlines | §4.3.1, `CSV-*` |
+| D3 | E2E tooling | Playwright + axe. CI installs **Chromium only** (`npx playwright install --with-deps chromium`) and caches the browser directory | §5.4, §7.1, `CI-*` |
+| D4 | Home counters | Caption row; **never render a stat whose value is 0; hide the row if all are 0**. Persistence finding reported first (§4.2.1); the counters feature is **on hold** until you confirm the hosting setup | §4.2, `HOME-*` |
+| D5 | Score visual | Linear bar with `role="meter"`, `aria-valuemin/max/now` (+ `aria-valuetext`); numeric score and text label always shown next to the bar | §4.3, `RES-01` |
+| D6 | Fonts | Self-hosted latin-subset variable woff2, `font-display: swap`, preload **only** the primary Inter file, OFL licence files shipped, system font stacks as fallback | §3.2.1, `FONT-*` |
+| D7 | Theme toggle | Not needed. `prefers-color-scheme` only | A2 |
+| D8 | GitHub Pages redirect page | Leave as is. Out of scope | n/a |
+
 Workstreams, in priority order:
 
 1. UI/UX redesign
@@ -36,7 +49,8 @@ The requested `apple-design` skill is not installed in this environment. It isn'
 | A1 | The HTTP API and `shared/types.ts` stay unchanged | The redesign is client-side; third-party API consumers must not break | If the API has to change (e.g. a CSV export endpoint), it gets its own PR with versioned types |
 | A2 | Theme follows the OS (`prefers-color-scheme`), with no manual toggle | Needs zero JS, so the CSP `script-src 'self'` stays intact and there's no flash of the wrong theme | A toggle needs an external `theme.js` loaded before first paint plus `localStorage`. That's about half a day of work |
 | A3 | Tailwind stays at 3.4 | The audit found no problem that v4 fixes and CSS variables don't | A move to v4 would change the token mechanism (§3.8) from `tailwind.config.ts` to `@theme` in CSS |
-| A4 | Fonts are self-hosted | Helmet's default CSP allows `font-src 'self'`; no third-party requests (privacy) | If system fonts are chosen instead (open question Q6), drop the two font packages. Mono glyph disambiguation then varies by OS |
+| A4 | Fonts are self-hosted (confirmed, D6) | Helmet's default CSP allows `font-src 'self'`; no third-party requests (privacy) | n/a (decided) |
+| A6 | The public origin is known at **runtime**, not build time (D1) | `docker build` and GitHub CI have no `SITE_URL`/`RENDER_EXTERNAL_URL`, and one image must be deployable to any host. So the check is a fail-fast at **startup** rather than a build failure | If you require a build-time failure, `vite.config.ts` must read the variable and every CI/Docker build must pass it. See §4.1.1 |
 | A5 | Tests use Playwright with `page.route()` mocks | Live OSINT sources are slow and non-deterministic. Mocks make UI states reproducible | Without e2e tests, about 40% of the checklist becomes manual |
 
 ---
@@ -71,7 +85,7 @@ Every row must still work after the redesign. `FEAT-*` in the checklist maps one
 | F22 | API docs page | `/api` · `pages/ApiDocs.tsx` | Six endpoints with method, path, description, curl example |
 | F23 | 404 page | `App.tsx:8-19` | Unknown routes show "Page not found" plus a link home |
 | F24 | App shell | `components/Layout.tsx` | Sticky header; nav Lookup/Sources/API with active state (**Lookup is active on `/search` too**); GitHub link; footer disclaimers ("public sources only", "indicators, not proof") |
-| F25 | Document metadata | `client/index.html` | Title, description, OG title/description/image, theme-color, favicon |
+| F25 | Document metadata | `client/index.html` | Title, description, OG title/description/image, theme-color, favicon. **New (D1):** `og:url`, `og:image` and `twitter:image` are always absolute URLs built from the resolved site URL |
 | F26 | Reduced motion | `index.css:49-56` | Animations/transitions neutralised under `prefers-reduced-motion: reduce` |
 | F27 | Server contract | `server/routes/api.ts`, `server/app.ts` | `/api/lookup`, `/api/lookup/stream`, `/api/reports`, `/api/sources`, `/api/stats`, `/api/health` unchanged; rate limits send draft-7 `RateLimit` headers; CSP `script-src 'self'`, `img-src https:`; no query strings in logs |
 
@@ -193,7 +207,22 @@ High and critical share a hue on purpose. They're told apart by the **fill weigh
 | `text-title-1` | 32 / 40 | 700 | −0.02em | Home headline only |
 | `text-display` | 48 / 56 | 700 | −0.02em | Risk score number only |
 
-Rules: numbers in data use `font-variant-numeric: tabular-nums`. No uppercase micro-labels; section labels use `footnote` at weight 600 in sentence case. Delivered as `@fontsource-variable/inter` and `@fontsource-variable/jetbrains-mono` (latin subset, `font-display: swap`). Expected weight is about 70–110 KB woff2 in total, cached immutably under `/assets/`.
+Rules: numbers in data use `font-variant-numeric: tabular-nums`. No uppercase micro-labels; section labels use `footnote` at weight 600 in sentence case.
+
+#### 3.2.1 Font delivery (decision D6)
+
+| Aspect | Spec | Why |
+|---|---|---|
+| Source | `@fontsource-variable/inter` and `@fontsource-variable/jetbrains-mono` **5.3.0** as **devDependencies** | Reproducible, OFL-1.1, maintained upstream |
+| Files shipped | Only `files/inter-latin-wght-normal.woff2` (48,256 B) and `files/jetbrains-mono-latin-wght-normal.woff2` (40,404 B), which is **88.7 KB total**; no italics, no other subsets | Latin subset only; weight axis covers 100–900 in one file |
+| Location | `npm run fonts:vendor` (`scripts/vendor-fonts.mjs`) copies them to `client/public/fonts/inter-latin-wght-5.3.0.woff2` and `jetbrains-mono-latin-wght-5.3.0.woff2`, plus the packages' `LICENSE` as `OFL-Inter.txt` and `OFL-JetBrainsMono.txt`. The files are committed | Preload needs a **stable URL** written in `index.html`. Vite hashes imported fonts, and a hand-written `<link rel="preload">` wouldn't follow the hash. The version in the filename replaces the hash for cache-busting |
+| `@font-face` | In `client/src/styles/fonts.css`: `font-family: "Inter Variable"`, `src: url("/fonts/inter-latin-wght-5.3.0.woff2") format("woff2")`, `font-weight: 100 900`, `font-style: normal`, **`font-display: swap`**, `unicode-range` = the fontsource latin range (`U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD`). Same for JetBrains Mono | Characters outside latin (e.g. an IDN or homograph domain in Cyrillic) fall through to the system font, so they still render and are still visibly different |
+| Preload | Exactly one: `<link rel="preload" href="/fonts/inter-latin-wght-5.3.0.woff2" as="font" type="font/woff2" crossorigin>` | Inter is used above the fold on every page. Mono appears later, on results. `crossorigin` is required for font preloads even on the same origin, or the font is fetched twice |
+| Fallback | `--font-sans: "Inter Variable", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;` `--font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;` | Usable text before the font arrives, or if it's blocked |
+| Layout shift | Optional `@font-face { font-family: "Inter Fallback"; src: local("Arial"); size-adjust: 107%; ascent-override: 90%; }` inserted after Inter in the stack; values tuned in P1 | Reduces reflow when `swap` happens |
+| Caching | `server/index.ts` static `setHeaders` extends `immutable, max-age=31536000` from `/assets/` to `/fonts/` | Versioned names make long caching safe |
+| Licences | `OFL-*.txt` next to the fonts (served and in the repo); README "License" section names both fonts and the OFL | OFL requires the licence to accompany the font files |
+| CSP | No change: `font-src 'self'` comes from helmet's defaults | Self-hosted |
 
 ### 3.3 Spacing (4 px base, 8 px rhythm)
 
@@ -295,6 +324,41 @@ scripts/
 | Two-part footer with shield icon | One line, `caption`: "Public sources only. The target is never contacted. Results are indicators, not proof." + version + GitHub | Literal, shorter, keeps both disclaimers |
 | Dark-only, hard-coded theme-color | Follows OS; `color-scheme: light dark`; per-scheme `theme-color` | Decision A2 |
 | 404: mono "404" in brand green | `title-2` "Page not found", `body` "Check the address or start a new lookup.", secondary button "Go to lookup" | Literal copy |
+| Relative `og:image`, no `og:url` | Absolute `og:url`, `og:image`, `twitter:image`, `<link rel="canonical">` from the resolved site URL (§4.1.1) | Crawlers ignore relative OG URLs; decision D1 |
+
+#### 4.1.1 Absolute site URL (decision D1)
+
+**Resolution order:** `SITE_URL` → `RENDER_EXTERNAL_URL` → (development/test only) `http://localhost:${PORT}`.
+- `RENDER_EXTERNAL_URL` is set automatically by Render on web services, so the Render blueprint needs no change.
+- Docker/VPS deployments must set `SITE_URL`.
+
+**Validation** (in `server/config.ts`, the same zod fail-fast pattern the file already uses):
+- Parse with `new URL()`.
+- Protocol must be `https:`, or `http:` only when `NODE_ENV !== "production"`.
+- Path, query and hash must be empty.
+- Store it without a trailing slash, as `config.SITE_URL`.
+- If `NODE_ENV=production` and neither variable is set, or the value is invalid, `loadConfig()` throws:
+
+  > `Invalid configuration: SITE_URL is required in production (the public origin, e.g. https://scamshield.example). On Render, RENDER_EXTERNAL_URL is used automatically when SITE_URL is unset.`
+
+  The process exits non-zero before listening, so Render marks the deploy as failed instead of serving broken previews. This is the "clear error at startup" option. A build-time failure was rejected because `docker build` and CI have no public origin (A6).
+
+**Injection** (the page stays one static SPA; only the `<head>` values change):
+
+| Where | How |
+|---|---|
+| `client/index.html` | Placeholders: `<link rel="canonical" href="%SITE_URL%%PATH%">`, `<meta property="og:url" content="%SITE_URL%%PATH%">`, `<meta property="og:image" content="%SITE_URL%/og.png">`, `og:image:width` 1200, `og:image:height` 630, `twitter:card` `summary_large_image`, `twitter:image` |
+| Production (`server/index.ts`) | Read `dist/public/index.html` once at startup. For every HTML response, replace `%SITE_URL%` with the HTML-attribute-escaped origin and `%PATH%` with `req.path` (**query string never included**: lookups can contain emails and phone numbers). Serve this for the SPA fallback **and** for a direct `GET /index.html`, which `express.static` would otherwise serve raw with the placeholders |
+| Development (Vite middleware) | A 10-line `transformIndexHtml` plugin in `vite.config.ts` does the same substitution using the same resolver (`server/lib/siteUrl.ts`, a pure function shared by config and plugin) |
+| Unit tests | `tests/siteUrl.test.ts`: precedence, fallback, trailing-slash normalisation, rejection of relative/`ftp:`/path-bearing values, production-missing error text, dev fallback, escaping of `"<>&` |
+
+**Operational impact (breaking for self-hosters):**
+- An existing Docker/VPS deployment without `SITE_URL` will refuse to start after upgrading.
+- Mitigations:
+  - add `SITE_URL=` to `.env.example`
+  - add `-e SITE_URL=https://…` to the Docker example in DEPLOYMENT.md
+  - add a line to the production checklist
+  - note the change in the release notes
 
 ### 4.2 Home (`/`)
 
@@ -304,9 +368,36 @@ scripts/
 | Search box with glow shadow and nested focus treatment | 44 px `rounded-lg` field, `border-strong` boundary, a single focus ring on the field container, type badge (accent-tint) on the right, primary button **"Look up"** (visible label at all widths; icon-only below 400 px keeps an `aria-label`) | #3, #4, #21 |
 | (no helper text) | Helper text below the field (`footnote`, tertiary): "Paste a whole message to extract links and numbers. Defanged input like hxxp://evil[.]com works." | Moves the useful parts of the "1-2-3" section to where they're needed |
 | "Try:" chips | "Examples" label + 6 `plain` buttons in `footnote` ("Phishing domain", "Email", …) | Keeps F2; quieter |
-| 4 big counters band (shows zeros) | Single `caption` row under the examples: "6 known scam indicators · 0 community reports (24 h) · 0 lookups run". Skeleton while loading; row hidden on error (non-critical data) | Keeps F3. The numbers stay honest without making zeros the loudest thing on the page. See Q4 |
+| 4 big counters band (shows zeros) | Single `caption` row under the examples, e.g. "1,204 lookups run · 38 community reports · 6 known scam indicators". **Any stat equal to 0 is not rendered; if all four are 0 the row isn't rendered at all** (no empty container, no separators). Skeleton while loading; row hidden on error (non-critical data). Separators come from CSS so none are left dangling | Keeps F3 (decision D4). **On hold until §4.2.1 is confirmed** |
 | 6 icon-tile capability cards | One `Card` holding a two-column definition table, "What each lookup checks": type (Email, Link, Domain, IP, Phone, Message) → a comma-separated list of checks, then a "See all sources" link to `/sources` | Keeps F4. Scannable, no decorative icon tiles, about 60% less height |
 | "1. Paste anything / 2. … / 3. …" | Removed (content moved to helper text and the Sources page) | Redundant |
+
+#### 4.2.1 Where the counters are stored (finding, reported before building on it)
+
+None of the four counters are held in memory. All come from the **SQLite file at `DATABASE_URL`** (`server/lib/community.ts:141-168`):
+
+| Counter | Source | Notes |
+|---|---|---|
+| Lookups run | `statistics` row `total_lookups`, incremented by `onLookup` (`server/index.ts:39` → `server/engine/lookup.ts:52`) | **Cache hits aren't counted:** the cached branch returns at `lookup.ts:45-50`, before the increment |
+| Community reports | `SUM(scam_reports.report_count)` | |
+| Reports (24 h) | `COUNT(report_events)` where `created_at` is in the last 24 h | Goes to 0 by design after a quiet day, so D4 hides it |
+| Known scam indicators | `COUNT(common_scams)` | Re-seeded idempotently on every boot (`server/seed.ts`), so it's always ≥6 and **never resets** |
+
+**Whether they survive a redeploy depends entirely on the disk behind `DATABASE_URL`:**
+
+| Hosting | `DATABASE_URL` | Survives redeploy / restart / spin-down? |
+|---|---|---|
+| Render via `render.yaml` as committed (`plan: starter`, 1 GB disk at `/var/data`, `DATABASE_URL=/var/data/scamshield.db`) | on persistent disk | **Yes** |
+| Render **Free** (no persistent disks; the instance spins down after inactivity), or a service created without the blueprint's disk | container filesystem (default `sqlite.db` in the working dir) | **No**: lookups, community reports and the 24 h count reset to 0 on **every deploy, restart and spin-down**. So do the **community reports themselves**, not just the counters |
+| Docker with `-v scamshield-data:/data` | `/data/scamshield.db` on a named volume | Yes |
+| Docker without a volume | container layer | No |
+
+I can't tell from the repo which Render plan `scamshield-dkmg.onrender.com` uses. To check in the Render dashboard, open the service and look at **Disks** (a disk mounted at `/var/data` should be listed) and at **Environment** (`DATABASE_URL` should point under that mount).
+
+**Consequence for D4 if it's ephemeral:** after every spin-down the row shows only "6 known scam indicators". It's still honest, but "lookups run" becomes meaningless. The counters work is **on hold** until you confirm one of:
+- (a) persistent disk is in place, so build as specified;
+- (b) it's ephemeral and you accept resets, so build as specified and add a "since <boot time>" qualifier;
+- (c) move storage to a hosted database. That's a separate project; ARCHITECTURE.md (Scaling path) already sketches the move to Postgres.
 
 ### 4.3 Lookup results (`/search`), the core screen
 
@@ -335,7 +426,7 @@ scripts/
 | Type chip + indicator `h1` (mono, `break-all`) | `h1` indicator in mono `title-2`, wrapping at `/ . @ -` via `overflow-wrap:anywhere` (not mid-word for messages); **copy button** beside it. Messages are shown as a quoted `body` block clamped to 3 lines with "Show full message" | #13, #29 |
 | Relative time only when cached; `0.0 s` shown for cached results | Meta row: `<time dateTime=ISO>` absolute local time + UTC tooltip; duration only when not cached; "Cached, 4 min ago" badge when cached; "18 of 22 sources answered" | Timestamps are required for evidence; fixes #13 and #29 |
 | Share / JSON / Re-scan / Report (rose) | **Copy link** (honest: shows "Couldn't copy" on failure) · **Export** menu (JSON unchanged, plus CSV) · **Refresh** (tooltip "Skip the cache and query every source again") · **Report…** (secondary, flag icon) | #21, #22. Report isn't destructive, so it doesn't get danger styling |
-| Semicircle SVG gauge (200 px, 800 ms) | `display` score "98" + "/100" `caption`, level label `headline` in the level colour, **linear meter** (`role="meter"`, `aria-valuenow`, 8 px, 200 ms fill) with 5 tick labels | More compact, aligns with the text column, and reads correctly without colour. See Q5 |
+| Semicircle SVG gauge (200 px, 800 ms) | `VerdictMeter`: the visible number `display` "98" + `caption` "/100" and the text label `headline` "Dangerous" sit **on the same row, directly beside the bar**. The bar is an 8 px track with a 200 ms fill (none under reduced motion), exposed as `role="meter"` with `aria-valuemin="0"`, `aria-valuemax="100"`, `aria-valuenow={score}`, `aria-valuetext="98 out of 100, Dangerous"`, and `aria-labelledby` pointing at a "Risk score" label. While scoring: the number shows "—", the label says "Scoring…", and the meter carries no `aria-valuenow` and has `aria-busy="true"`. Colour is the third channel, never the only one | Decision D5. A `div` with the ARIA role instead of native `<meter>`, because `<meter>`'s colours can't be styled reliably across browsers and would bypass the tokens |
 | Whole panel `aria-live` | A single `role="status"` region announcing only phase changes ("Looking up… 18 of 22", "Done. Score 98, Dangerous") | #8 |
 | Progress bar `div` 500 ms | `role="progressbar"` with `aria-valuemax=total`; 150 ms | #8, #16 |
 | Assessment with Sparkles icon | "Summary" + `caption` "Written by AI · the score is rule-based" (or "Generated from rules") | #23; states plainly what the AI does and doesn't decide |
@@ -365,7 +456,46 @@ scripts/
 
 **Bug fix folded in (#11):** the fallback request uses an `AbortController` and aborts as soon as headers arrive. It only parses JSON when `!response.ok`, and it never parses a 200 SSE body.
 
-**CSV export (new, additive; see Q2):** `scamshield-<type>-<epoch>.csv`, UTF-8 with BOM, columns `generated_at, target_type, target, source_id, source_name, category, status, summary, signal_kind, signal_severity, signal_label, source_url, duration_ms`, one row per signal (a source with no signals gets one row with empty signal columns). Values are CSV-escaped, and values starting with `= + - @` are prefixed with `'` to prevent formula injection in spreadsheets.
+#### 4.3.1 CSV export (decision D2)
+
+**File:** `scamshield-<type>-<epoch>.csv`, MIME `text/csv;charset=utf-8`, generated client-side from the `done` report (no server change). The button is disabled until `done`, like JSON.
+
+**Columns** (one row per signal; a source with no signals gets one row with empty signal columns): `generated_at, target_type, target, source_id, source_name, category, status, summary, signal_kind, signal_severity, signal_label, source_url, duration_ms`.
+
+**Encoding rules** (OWASP "CSV Injection"), in a pure module `client/src/lib/csv.ts` with no DOM access:
+
+1. Convert `null`/`undefined` to `""`; numbers and booleans become strings with `String()`.
+2. **Formula neutralisation:** if the cell's **first character** is `=`, `+`, `-`, `@`, tab (`\t`, U+0009) or carriage return (`\r`, U+000D), prepend a single quote `'`. Dangerous characters that aren't leading are left alone.
+3. **Quoting:** wrap **every** field in double quotes and double any embedded `"` (RFC 4180). Commas, LF and CRLF inside values are then safe.
+4. **Rows** end with CRLF. The header row gets the same treatment.
+5. **File** starts with the UTF-8 BOM `﻿` so Excel detects UTF-8 (IDN domains, non-ASCII message text).
+
+Why these rules:
+- Several fields are attacker-controlled: the looked-up message text, WHOIS/registrar strings, profile names. A `=HYPERLINK(...)` in a scam SMS must not execute when an analyst opens the export.
+- The quote prefix is the OWASP-recommended neutraliser. Quoting alone is not enough, because spreadsheets evaluate quoted formulas.
+- Trade-off: a legitimately negative number would become text. No exported column is negative (`duration_ms ≥ 0`), and the prefix is only visible in raw text.
+
+**Unit tests** (`tests/csv.test.ts`, runs in the existing vitest `node` environment). The exact test names are fixed so `CSV-02` can grep for them:
+
+| Test name | Asserts |
+|---|---|
+| `neutralises leading "="` | `=1+1` → `"'=1+1"` |
+| `neutralises leading "+"` | `+1` → `"'+1"` |
+| `neutralises leading "-"` | `-2+3` → `"'-2+3"` |
+| `neutralises leading "@"` | `@SUM(A1)` → `"'@SUM(A1)"` |
+| `neutralises leading tab` | `\t=1` → `"'\t=1"` |
+| `neutralises leading carriage return` | `\r=1` → `"'\r=1"` |
+| `does not prefix a dangerous character that is not leading` | `a=b` → `"a=b"` |
+| `does not prefix safe values` | `example.com` → `"example.com"` |
+| `quotes fields containing commas` | `a,b` → `"a,b"` |
+| `doubles embedded double quotes` | `say "hi"` → `"say ""hi"""` |
+| `keeps LF newlines inside quoted fields` | `a\nb` → `"a\nb"`, and the row count is unchanged |
+| `keeps CRLF newlines inside quoted fields` | `a\r\nb` → `"a\r\nb"` |
+| `quotes every field` | every field of every row matches `^".*"$` (dotall) |
+| `renders null and undefined as empty quoted fields` | → `""` |
+| `terminates rows with CRLF` | output lines joined by `\r\n` |
+| `starts with a UTF-8 BOM` | `out.charCodeAt(0) === 0xFEFF` |
+| `round-trips through a CSV parser` | a small RFC 4180 parser in the test recovers the original values (with the `'` prefix where applied) |
 
 ### 4.4 Report dialog
 
@@ -408,7 +538,7 @@ scripts/
 | `.panel`, `.chip`, `.btn*`, `.grid-bg` in `client/src/index.css:21-45` | Replaced by primitives (§3.8) | P1–P6 |
 | `keyframes.fade-up`, `keyframes.scan`, `animation.*` in `tailwind.config.ts:26-34` | Replaced by motion tokens; the scan effect is banned | P3 |
 | `colors.ink`, `colors.brand` in `tailwind.config.ts:10-25` | Replaced by token colours | P6 |
-| `RiskGauge.tsx` | Replaced by the `VerdictMeter` inside `VerdictPanel` (pending Q5) | P3 |
+| `RiskGauge.tsx` | Replaced by the `VerdictMeter` inside `VerdictPanel` (D5) | P3 |
 | `PendingCard` (`CheckCard.tsx:136-151`) | Replaced by `Skeleton` + pending card variant | P3 |
 | `client/public/logo.png` (318 KB JPEG) | Replaced by SVG/PNG set (§8) | P7 |
 | `docs/home.png`, `docs/lookup-message.png` | Stale (#29); replaced by light/dark screenshots | P8 |
@@ -443,10 +573,10 @@ These are exported but only used inside their own module (grep shows no other im
 | `openai` | `engine/summary.ts` (optional AI summaries) | Keep |
 | `wouter` | router | Keep |
 | `autoprefixer` (dev) | `postcss.config.js` (not an import, so a naive scan misses it) | Keep |
-| **Add** `@fontsource-variable/inter`, `@fontsource-variable/jetbrains-mono` | fixes #6 | Runtime, fonts only |
-| **Add (dev)** `@playwright/test`, `@axe-core/playwright` | e2e + a11y gates | Uses the preinstalled Chromium; see Q3 |
+| **Add (dev)** `@fontsource-variable/inter@5.3.0`, `@fontsource-variable/jetbrains-mono@5.3.0` | fixes #6; source for `npm run fonts:vendor` (§3.2.1) | **devDependencies**: only the vendored latin woff2 + OFL files ship; nothing is imported at runtime |
+| **Add (dev)** `@playwright/test@1.63.0`, `@axe-core/playwright@4.13.0` (latest at time of writing; pin exact) | e2e + a11y gates (D3) | `playwright.config.ts` defines **Chromium-only** projects (light, dark, mobile-375, reduced-motion). CI installs only Chromium (see §7.1). Locally, the preinstalled browser is used via `PLAYWRIGHT_BROWSERS_PATH` |
 
-No dependency is unused, so none are removed. No UI framework is added: the audit shows the problems are token discipline and semantics, not missing components.
+No dependency is unused, so none are removed. No runtime dependency is added. No UI framework is added: the audit shows the problems are token discipline and semantics, not missing components.
 
 ### 5.5 Naming
 
@@ -467,14 +597,14 @@ No dependency is unused, so none are removed. No UI framework is added: the audi
 3. **What it does and doesn't do**: public sources only; never contacts the target; indicators, not proof; responsible-use note, moved up from the bottom.
 4. **What it checks**: keep the current table (it's accurate); footnote the optional API-key sources.
 5. **Quick start**: `npm install`, `npm run dev`; Docker one-liner.
-6. **Configuration**: table of **variable names** and purpose only (from `.env.example`, never values); link to DEPLOYMENT.md.
+6. **Configuration**: table of **variable names** and purpose only (from `.env.example`, never values); link to DEPLOYMENT.md. `SITE_URL` is listed first as **required in production** (falls back to `RENDER_EXTERNAL_URL` on Render).
 7. **Using the app**: lookup → results overview → filters → copy/export (JSON, CSV) → report dialog → rate limits.
 8. **API**: current section, plus the rate-limit headers.
 9. **How scoring works**: current section (it's accurate).
 10. **Architecture & deployment**: links to ARCHITECTURE.md and DEPLOYMENT.md.
 11. **Development**: `check`, `test`, `test:e2e`, `lint:design`, `check:contrast`, `db:generate`, `data:disposable`; "Adding a source".
 12. **Accessibility**: WCAG 2.2 AA target, what's automated (axe, contrast script), how to report issues.
-13. **License**: MIT.
+13. **License**: MIT for the code; Inter and JetBrains Mono are bundled under the SIL Open Font License 1.1 (`client/public/fonts/OFL-*.txt`).
 
 Removed: the "works like hosted tools such as EmailOSINT" comparison, which is marketing framing. The test-count claim ("100") must be replaced by the actual `vitest` total at the time of writing. ARCHITECTURE.md's client box and the `nofollow` claim get updated in the same PR.
 
@@ -486,9 +616,9 @@ Removed: the "works like hosted tools such as EmailOSINT" comparison, which is m
 
 | Phase | Scope | Exit criteria (checklist IDs) | Size |
 |---|---|---|---|
-| **P0 Safety net** | Add Playwright + axe; `tests/e2e/` with `page.route()` mocks for `/api/stats`, `/api/sources`, `/api/reports`, and an **SSE fixture** (`tests/e2e/fixtures/*.sse`: start/check/done built from a real report) for `/api/lookup/stream`; one test per F1–F27; axe run recorded as a **baseline** (expected failures listed, not yet blocking); `scripts/lint-design.mjs` in report-only mode; `npm run test:e2e` in CI | GATE-04, FEAT-* | M |
-| **P1 Foundation** | `tokens.css`, `base.css`, fonts, `check-contrast.mjs`; Tailwind **extend** mapping (old classes still compile); primitives in `components/ui/` | TOK-*, A11Y-02 | M |
-| **P2 Shell** | Layout, skip link, Logo placeholder (`currentColor` wordmark), footer, 404, `index.html` colour-scheme metas | A11Y-05/06, SHELL-* | S |
+| **P0 Safety net** | Add Playwright + axe; `tests/e2e/` with `page.route()` mocks for `/api/stats`, `/api/sources`, `/api/reports`, and an **SSE fixture** (`tests/e2e/fixtures/*.sse`: start/check/done built from a real report) for `/api/lookup/stream`; one test per F1–F27; axe run recorded as a **baseline** (expected failures listed, not yet blocking); `scripts/lint-design.mjs` in report-only mode; `npm run test:e2e` in CI: `actions/cache@v4` on `~/.cache/ms-playwright` keyed by `${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}`; on cache **miss** `npx playwright install --with-deps chromium`, on **hit** `npx playwright install-deps chromium` (OS packages aren't in the cache); upload the HTML report as an artifact on failure | GATE-04, FEAT-* | M |
+| **P1 Foundation** | `tokens.css`, `base.css`, `fonts.css` + `npm run fonts:vendor` (§3.2.1), `check-contrast.mjs`; Tailwind **extend** mapping (old classes still compile); primitives in `components/ui/` | TOK-*, A11Y-02 | M |
+| **P2 Shell** | Layout, skip link, Logo placeholder (`currentColor` wordmark), footer, 404, `index.html` colour-scheme metas; **site URL resolution + `<head>` injection** (§4.1.1), with `SITE_URL=` in `.env.example` and DEPLOYMENT.md | A11Y-05/06, SHELL-* | S |
 | **P3 Results** | Search page, VerdictPanel, CheckCard, overview table, filter, states, fallback-fetch fix, CSV export, ReportDialog | STATE-*, RES-*, A11Y-* on `/search` | L |
 | **P4 Home** | New home composition | HOME-* | S |
 | **P5 Sources/API** | Tables, states, copy buttons | SRC-*, API-* | S |
@@ -509,8 +639,12 @@ Order rationale: the safety net comes first because streaming UI regresses silen
 | Third-party avatars/images look wrong in light mode | Medium | Low | 1 px `border` ring on item images; `referrerPolicy="no-referrer"` kept |
 | Light theme reveals low-contrast hard-coded colours | High during migration | Medium | `lint-design` bans raw palette/hex; axe runs in both schemes |
 | CSV formula injection | Low | Medium | Prefix `= + - @` values; unit test |
-| e2e flakiness / CI time (+1–2 min) | Medium | Low | Route mocks only (no live network); Chromium preinstalled; `retries: 1` in CI only |
-| Scope creep (new features during redesign) | Medium | Medium | Only CSV export and the findings filter are new; both are listed and gated by Q2 |
+| e2e flakiness / CI time (+1–2 min) | Medium | Low | Route mocks only (no live network); Chromium-only with a cached browser directory; `retries: 1` in CI only |
+| **Existing self-hosted deploys stop starting** (no `SITE_URL`) | High for Docker/VPS users | High | Clear error text naming both variables; `.env.example`, DEPLOYMENT.md Docker example and production checklist updated in the same PR; release note. Render is unaffected (`RENDER_EXTERNAL_URL`) |
+| Placeholder leak: `/index.html` served raw with `%SITE_URL%` | Medium | Medium | Explicit route for `/index.html`; `SITE-04` curls it |
+| CSV opened in a spreadsheet executes attacker text | Low after D2 | High | OWASP prefixing + full quoting + 17 named unit tests (§4.3.1) |
+| Counters reset on ephemeral hosting | Unknown (§4.2.1) | Medium | Counters work on hold until hosting is confirmed |
+| Scope creep (new features during redesign) | Medium | Medium | Only CSV export (D2) and the findings filter are new; both are listed |
 
 ---
 
@@ -551,7 +685,7 @@ Order rationale: the safety net comes first because streaming UI regresses silen
 | `client/public/favicon-32.png` | 32×32 fallback |
 | `client/public/apple-touch-icon.png` | 180×180, opaque (iOS ignores transparency) |
 | `client/public/og.png` | 1200×630: `bg` neutral, mark + wordmark + one line "Scam and OSINT lookups from public sources", no gradients |
-| `index.html` | `<link rel="icon" href="/favicon.svg" type="image/svg+xml">`, PNG fallback, `apple-touch-icon`, absolute `og:image` (see Q1), `og:image:width/height`, `twitter:card=summary_large_image` |
+| `index.html` | `<link rel="icon" href="/favicon.svg" type="image/svg+xml">`, PNG fallback, `apple-touch-icon`, absolute `og:image` from `%SITE_URL%` (§4.1.1), `og:image:width/height`, `twitter:card=summary_large_image` |
 
 The PNGs are rasterised once from the SVG sources with `npx --yes @resvg/resvg-js-cli`. The SVG masters are committed under `docs/brand/`. Nothing is added to `package.json`.
 
@@ -559,4 +693,6 @@ The PNGs are rasterised once from the SVG sources with `npx --yes @resvg/resvg-j
 
 ## Open questions
 
-See the summary returned with this plan; they're repeated at the end of [`REDESIGN_CHECKLIST.md`](REDESIGN_CHECKLIST.md#open-questions).
+Q1–Q8 were answered on 2026-09-24 (see the decisions log at the top). One item is **blocking** before the home counters are built:
+
+- **Q9 Counter persistence (§4.2.1):** is the live Render service on a paid plan with the `/var/data` disk from `render.yaml`, or on Free/ephemeral storage? Reply (a), (b) or (c) as listed in §4.2.1.
