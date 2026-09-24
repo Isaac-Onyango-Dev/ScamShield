@@ -16,6 +16,10 @@ services:
         value: "1"
       - key: REPORTER_SALT
         generateValue: true
+      # The blueprint mounts a persistent disk (below), so reports survive restarts.
+      # On a plan without a disk, remove this so the UI shows the temporary-storage notice.
+      - key: STORAGE_PERSISTENT
+        value: "true"
       - key: OPENAI_API_KEY
         sync: false
       - key: HIBP_API_KEY

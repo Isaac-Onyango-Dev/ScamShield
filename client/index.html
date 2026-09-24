@@ -1,18 +1,34 @@
 <!doctype html>
-<html lang="en" class="bg-ink-950">
+<html lang="en">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="icon" type="image/png" href="/logo.png" />
-        <meta name="theme-color" content="#07090d" />
-        <title>ScamShield — Investigate emails, links, domains, IPs & phone numbers</title>
+        <meta name="color-scheme" content="light dark" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F5F5F7" />
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0E0F11" />
+        <title>ScamShield: check emails, links, domains, IPs and phone numbers</title>
         <meta
             name="description"
-            content="Free, open-source OSINT & scam intelligence. Check an email, link, domain, IP, phone number or message against breach data, infostealer logs, blocklists, DNS, RDAP and community reports."
+            content="Look up an email address, link, domain, IP address, phone number or message against public threat-intelligence sources and get an explained risk score."
         />
-        <meta property="og:title" content="ScamShield — Scam & OSINT lookups" />
-        <meta property="og:description" content="Investigate any email, link, domain, IP or phone number before you trust it." />
-        <meta property="og:image" content="/logo.png" />
+        <link rel="preload" href="/fonts/inter-latin-wght-5.3.0.woff2" as="font" type="font/woff2" crossorigin />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+        <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <!-- The site URL, path and storage-mode placeholders below are filled per request by the server (server/lib/siteUrl.ts). -->
+        <link rel="canonical" href="%SITE_URL%%PATH%" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="ScamShield" />
+        <meta property="og:title" content="ScamShield: scam and OSINT lookups" />
+        <meta property="og:description" content="Check an email, link, domain, IP, phone number or message against public sources before you trust it." />
+        <meta property="og:url" content="%SITE_URL%%PATH%" />
+        <meta property="og:image" content="%SITE_URL%/og.png" />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta property="og:image:alt" content="ScamShield" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:image" content="%SITE_URL%/og.png" />
+        <meta name="scamshield-storage" content="%STORAGE_MODE%" />
     </head>
     <body>
         <div id="root"></div>

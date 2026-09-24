@@ -260,14 +260,9 @@ export class App {
         return this.page.getByText(/AI-written summaries: enabled/);
     }
 
-    /**
-     * Opens the API docs page. Loading /api directly currently returns the server's JSON 404
-     * (the Express API router is mounted at /api, audit #32), so it is reached via the nav
-     * link the way users get there today. P5 fixes the route; then this becomes a plain goto.
-     */
+    /** Opens the API docs page (moved from /api to /api-docs so direct loads work, audit #32). */
     async gotoApiDocs() {
-        await this.page.goto("/definitely-not-a-page");
-        await this.navLink("API").click();
+        await this.page.goto("/api-docs");
         await this.page.getByRole("heading", { level: 1, name: "API" }).waitFor();
     }
 

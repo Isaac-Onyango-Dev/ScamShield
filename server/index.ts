@@ -13,6 +13,7 @@ import { createSummarizer } from "./engine/summary";
 import { ALL_CHECKS } from "./checks";
 import { createApp } from "./app";
 import { seed } from "./seed";
+import { renderIndexHtml, storageModeFrom } from "./lib/siteUrl";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 // Serve the built client whenever we're running from the bundle (dist/), even if the
@@ -43,10 +44,22 @@ const app = createApp({ config, lookup, community, cache, checks: ALL_CHECKS });
 
 if (isProd) {
     const clientDir = path.join(here, "public");
+    // index.html is a template: absolute og:url/og:image and the storage mode are filled per request.
+    const template = fs.readFileSync(path.join(clientDir, "index.html"), "utf8");
+    const storageMode = storageModeFrom(config.STORAGE_PERSISTENT);
+    const sendIndex = (req: express.Request, res: express.Response) => {
+        res.set("cache-control", "no-cache");
+        res.type("html").send(renderIndexHtml(template, { siteUrl: config.SITE_URL, path: req.path, storageMode }));
+    };
+    // Registered before the static handler so the raw template is never served.
+    app.get("/index.html", sendIndex);
     app.use(express.static(clientDir, { index: false, maxAge: "1h", setHeaders: (res, file) => {
-        if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader("cache-control", "public, max-age=31536000, immutable");
+        // Hashed bundles and versioned font files never change under the same name.
+        if (file.includes(`${path.sep}assets${path.sep}`) || file.includes(`${path.sep}fonts${path.sep}`)) {
+            res.setHeader("cache-control", "public, max-age=31536000, immutable");
+        }
     } }));
-    app.get("*", (_req, res) => res.sendFile(path.join(clientDir, "index.html")));
+    app.get("*", sendIndex);
 } else {
     // Dev: Vite middleware gives HMR on the same port as the API.
     const { createServer } = await import("vite");

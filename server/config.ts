@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resolveSiteUrl } from "./lib/siteUrl";
 
 const optional = z.preprocess((v) => (typeof v === "string" && v.trim() === "" ? undefined : v), z.string().optional());
 
@@ -26,11 +27,16 @@ const schema = z.object({
     CHECK_TIMEOUT_MS: z.coerce.number().int().min(500).default(8000),
     RATE_LIMIT_LOOKUPS_PER_MINUTE: z.coerce.number().int().min(1).default(20),
     RATE_LIMIT_REPORTS_PER_HOUR: z.coerce.number().int().min(1).default(10),
+    /** Public origin for absolute og:url/og:image; required in production (falls back to RENDER_EXTERNAL_URL). */
+    SITE_URL: optional,
+    RENDER_EXTERNAL_URL: optional,
+    /** Declare that DATABASE_URL is on persistent storage; otherwise the UI says reports are temporary. */
+    STORAGE_PERSISTENT: z.preprocess((v) => (typeof v === "string" ? ["1", "true", "yes"].includes(v.trim().toLowerCase()) : v), z.boolean().default(false)),
     /** Salt for hashing reporter IPs. Set a long random value in production. */
     REPORTER_SALT: z.string().default("scamshield-dev-salt"),
 });
 
-export type AppConfig = z.infer<typeof schema>;
+export type AppConfig = Omit<z.infer<typeof schema>, "SITE_URL"> & { SITE_URL: string };
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     const parsed = schema.safeParse(env);
@@ -38,7 +44,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         const issues = parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ");
         throw new Error(`Invalid configuration: ${issues}`);
     }
-    return parsed.data;
+    try {
+        return { ...parsed.data, SITE_URL: resolveSiteUrl(parsed.data) };
+    } catch (err) {
+        throw new Error(`Invalid configuration: ${(err as Error).message}`);
+    }
 }
 
 export const config = loadConfig();

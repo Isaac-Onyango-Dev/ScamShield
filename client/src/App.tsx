@@ -7,11 +7,11 @@ import { ApiDocsPage } from "@/pages/ApiDocs";
 
 function NotFound() {
     return (
-        <div className="mx-auto max-w-md px-4 py-24 text-center">
-            <p className="font-mono text-sm text-brand-400">404</p>
-            <h1 className="mt-2 text-2xl font-bold text-white">Page not found</h1>
-            <Link href="/" className="btn-primary mt-6">
-                Back to lookup
+        <div className="mx-auto flex max-w-xl flex-col items-center gap-3 px-4 py-20 text-center">
+            <h1 className="text-title-2 font-semibold text-fg">Page not found</h1>
+            <p className="text-body text-fg-secondary">Check the address or start a new lookup.</p>
+            <Link href="/" className="mt-2 inline-flex h-10 items-center rounded-md border border-line-strong bg-surface px-4 text-footnote font-semibold text-fg transition-colors duration-fast hover:bg-surface-2">
+                Go to lookup
             </Link>
         </div>
     );
@@ -24,7 +24,8 @@ export default function App() {
                 <Route path="/" component={HomePage} />
                 <Route path="/search" component={SearchPage} />
                 <Route path="/sources" component={SourcesPage} />
-                <Route path="/api" component={ApiDocsPage} />
+                {/* Not /api: the server's API router owns that prefix, so a reload there returned JSON (audit #32). */}
+                <Route path="/api-docs" component={ApiDocsPage} />
                 <Route component={NotFound} />
             </Switch>
         </Layout>
